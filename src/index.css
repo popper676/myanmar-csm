@@ -2,95 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --font-myanmar: 'Noto Sans Myanmar', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --background: 60 24% 96%;
+    --foreground: 0 0% 20%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 20%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 153 55% 23%;
+    --primary-foreground: 60 24% 96%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 60 10% 91%;
+    --secondary-foreground: 0 0% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 60 10% 93%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 43 80% 46%;
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 76% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 60 10% 88%;
+    --input: 60 10% 88%;
+    --ring: 153 55% 23%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --success: 120 61% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 100% 50%;
+    --warning-foreground: 0 0% 10%;
+    --info: 223 64% 45%;
+    --info-foreground: 0 0% 100%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 153 55% 23%;
+    --sidebar-foreground: 60 24% 96%;
+    --sidebar-primary: 43 80% 46%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 153 55% 18%;
+    --sidebar-accent-foreground: 60 24% 96%;
+    --sidebar-border: 153 40% 28%;
+    --sidebar-ring: 43 80% 46%;
+    --sidebar-muted: 153 30% 32%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 153 20% 8%;
+    --foreground: 60 24% 96%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 153 20% 12%;
+    --card-foreground: 60 24% 96%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 153 20% 12%;
+    --popover-foreground: 60 24% 96%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 43 80% 46%;
+    --primary-foreground: 0 0% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 153 20% 16%;
+    --secondary-foreground: 60 24% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 153 15% 18%;
+    --muted-foreground: 60 10% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 43 80% 46%;
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 76% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 153 15% 20%;
+    --input: 153 15% 20%;
+    --ring: 43 80% 46%;
+
+    --sidebar-background: 153 30% 10%;
+    --sidebar-foreground: 60 24% 96%;
+    --sidebar-primary: 43 80% 46%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 153 30% 15%;
+    --sidebar-accent-foreground: 60 24% 96%;
+    --sidebar-border: 153 20% 18%;
+    --sidebar-ring: 43 80% 46%;
+    --sidebar-muted: 153 20% 22%;
   }
 }
 
@@ -98,8 +101,73 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
+  .font-myanmar {
+    font-family: var(--font-myanmar);
+    font-size: 1.05em;
+    line-height: 1.7;
+  }
+  .font-mono-data {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer components {
+  .status-badge-pending {
+    @apply bg-warning/20 text-warning-dark border border-warning/30;
+  }
+  .status-badge-confirmed {
+    @apply bg-info/20 text-info border border-info/30;
+  }
+  .status-badge-delivered {
+    @apply bg-success/20 text-success border border-success/30;
+  }
+  .status-badge-cancelled {
+    @apply bg-destructive/20 text-destructive border border-destructive/30;
+  }
+  .stock-sufficient {
+    @apply text-success;
+  }
+  .stock-low {
+    @apply text-warning-dark;
+  }
+  .stock-critical {
+    @apply text-destructive;
+  }
+  .card-elevated {
+    @apply bg-card rounded-lg border shadow-md hover:shadow-lg transition-shadow duration-300;
+  }
+  .gold-button {
+    @apply bg-accent text-accent-foreground font-semibold hover:brightness-110 transition-all duration-200 rounded-md px-4 py-2;
+  }
+  .jade-surface {
+    @apply bg-primary text-primary-foreground;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out forwards;
+  }
+  .animate-pulse-dot {
+    animation: pulseDot 2s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.6; }
 }
