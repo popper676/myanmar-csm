@@ -76,7 +76,7 @@ export async function api<T = any>(
 
   let res = await fetch(url, { ...options, headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !endpoint.startsWith('/auth/login')) {
     const body = await res.json().catch(() => ({}));
     if (body.code === 'TOKEN_EXPIRED' && tokens.refreshToken) {
       if (!isRefreshing) {
@@ -93,12 +93,10 @@ export async function api<T = any>(
         res = await fetch(url, { ...options, headers });
       } else {
         clearTokens();
-        window.location.href = '/login';
         throw new Error('Session expired');
       }
     } else {
       clearTokens();
-      window.location.href = '/login';
       throw new Error('Unauthorized');
     }
   }

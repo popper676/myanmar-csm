@@ -29,7 +29,7 @@ export default function Login() {
     setError("");
     try {
       await login(username, password);
-      navigate("/");
+      setTimeout(() => navigate("/", { replace: true }), 100);
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {

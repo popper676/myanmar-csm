@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { authApi } from '@/lib/api';
 
 interface User {
@@ -23,15 +23,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    return !!localStorage.getItem('accessToken');
+  });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    if (token) {
+    if (token && !user) {
       authApi.me()
         .then((userData) => {
           setUser(userData);
@@ -45,22 +51,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     setError(null);
     try {
       const data = await authApi.login(username, password);
       authApi.setTokens(data.accessToken, data.refreshToken);
-      setUser(data.user);
       localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
     } catch (err: any) {
       setError(err.message || 'Login failed');
       throw err;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch {
@@ -69,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authApi.clearTokens();
     setUser(null);
     localStorage.removeItem('user');
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{
