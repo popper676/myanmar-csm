@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, ChevronRight, Check, Search } from "lucide-react";
-import { purchaseOrders, suppliers, inventoryItems, formatMMK, type OrderStatus } from "@/data/dummy-data";
+import { Plus, X, ChevronRight, Check, Search, Loader2 } from "lucide-react";
+import { purchaseOrderApi, supplierApi } from "@/lib/api";
+import type { OrderStatus } from "@/data/dummy-data";
+
+const formatMMK = (amount: number): string => `${amount.toLocaleString()} ကျပ်`;
 
 const tabs = [
   { key: "all", label: "All Orders" },
@@ -25,9 +28,70 @@ export default function PurchaseOrders() {
   const [showCreate, setShowCreate] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [suppliersList, setSuppliersList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = activeTab === "all" ? purchaseOrders : purchaseOrders.filter((o) => o.status === activeTab);
-  const detailOrder = selectedOrder ? purchaseOrders.find((o) => o.id === selectedOrder) : null;
+  const fetchOrders = async (tab: string) => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (tab !== "all") params.status = tab;
+      const data = await purchaseOrderApi.list(params);
+      setOrders(data);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllOrders = async () => {
+    try {
+      const data = await purchaseOrderApi.list();
+      setAllOrders(data);
+    } catch (err) {
+      console.error("Failed to fetch all orders:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders(activeTab);
+    fetchAllOrders();
+  }, []);
+
+  useEffect(() => {
+    fetchOrders(activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    supplierApi.list().then(setSuppliersList).catch(console.error);
+  }, []);
+
+  const handleStatusChange = async (e: React.MouseEvent, orderId: string, status: string) => {
+    e.stopPropagation();
+    try {
+      await purchaseOrderApi.updateStatus(orderId, status);
+      fetchOrders(activeTab);
+      fetchAllOrders();
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
+  };
+
+  const handleCreateOrder = async () => {
+    try {
+      await purchaseOrderApi.create({});
+      setShowCreate(false);
+      fetchOrders(activeTab);
+      fetchAllOrders();
+    } catch (err) {
+      console.error("Failed to create order:", err);
+    }
+  };
+
+  const detailOrder = selectedOrder ? orders.find((o: any) => o.id === selectedOrder) : null;
 
   return (
     <div className="space-y-6">
@@ -48,7 +112,7 @@ export default function PurchaseOrders() {
             {tab.label}
             {tab.key !== "all" && (
               <span className="ml-1.5 text-xs text-muted-foreground">
-                ({purchaseOrders.filter((o) => o.status === tab.key).length})
+                ({allOrders.filter((o: any) => o.status === tab.key).length})
               </span>
             )}
           </button>
@@ -58,6 +122,11 @@ export default function PurchaseOrders() {
       {/* Orders Table */}
       <div className="card-elevated overflow-hidden">
         <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b">
@@ -72,12 +141,12 @@ export default function PurchaseOrders() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {orders.length === 0 ? (
                 <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
                   <p className="font-myanmar">မှာယူမှု မရှိသေးပါ</p>
                   <p className="text-xs mt-1">No orders found</p>
                 </td></tr>
-              ) : filtered.map((order) => (
+              ) : orders.map((order: any) => (
                 <tr key={order.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedOrder(order.id)}>
                   <td className="p-3 font-mono-data text-xs">{order.poNumber}</td>
                   <td className="p-3">{order.supplier}</td>
@@ -91,8 +160,8 @@ export default function PurchaseOrders() {
                   <td className="p-3">
                     {(order.status === 'pending') && (
                       <div className="flex gap-1">
-                        <button className="px-2 py-1 text-xs rounded bg-success/20 text-success hover:bg-success/30" onClick={(e) => e.stopPropagation()}>Approve</button>
-                        <button className="px-2 py-1 text-xs rounded bg-destructive/20 text-destructive hover:bg-destructive/30" onClick={(e) => e.stopPropagation()}>Reject</button>
+                        <button className="px-2 py-1 text-xs rounded bg-success/20 text-success hover:bg-success/30" onClick={(e) => handleStatusChange(e, order.id, 'approved')}>Approve</button>
+                        <button className="px-2 py-1 text-xs rounded bg-destructive/20 text-destructive hover:bg-destructive/30" onClick={(e) => handleStatusChange(e, order.id, 'cancelled')}>Reject</button>
                       </div>
                     )}
                   </td>
@@ -100,6 +169,7 @@ export default function PurchaseOrders() {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </div>
 
@@ -177,7 +247,7 @@ export default function PurchaseOrders() {
                       <h3 className="font-semibold mb-4">Select Supplier</h3>
                       <select className="w-full px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm">
                         <option>Choose supplier...</option>
-                        {suppliers.map((s) => <option key={s.id}>{s.nameEn} ({s.nameMm})</option>)}
+                        {suppliersList.map((s: any) => <option key={s.id}>{s.nameEn} ({s.nameMm})</option>)}
                       </select>
                     </div>
                   )}
@@ -189,12 +259,11 @@ export default function PurchaseOrders() {
                         <input className="w-full pl-10 pr-4 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" placeholder="Search products..." />
                       </div>
                       <div className="space-y-2">
-                        {inventoryItems.slice(0, 5).map((item) => (
+                        {suppliersList.slice(0, 5).map((item: any) => (
                           <div key={item.id} className="flex items-center justify-between p-3 rounded-md bg-sidebar-accent">
                             <span className="text-sm">{item.nameEn}</span>
                             <div className="flex items-center gap-2">
                               <input type="number" className="w-16 px-2 py-1 rounded bg-primary text-primary-foreground text-sm text-center" placeholder="Qty" />
-                              <span className="text-xs opacity-70">{formatMMK(item.unitPrice)}</span>
                             </div>
                           </div>
                         ))}
@@ -242,7 +311,7 @@ export default function PurchaseOrders() {
                   {step < 4 ? (
                     <button onClick={() => setStep(step + 1)} className="gold-button flex items-center gap-1">Next <ChevronRight className="w-4 h-4" /></button>
                   ) : (
-                    <button onClick={() => setShowCreate(false)} className="gold-button">Submit Order</button>
+                    <button onClick={handleCreateOrder} className="gold-button">Submit Order</button>
                   )}
                 </div>
               </div>

@@ -1,14 +1,11 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Package, ShoppingCart, Truck, AlertTriangle, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Package, ShoppingCart, Truck, AlertTriangle, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { formatMMK, formatMMKShort, monthlySalesData, topProductsData, recentOrders, lowStockItems, type OrderStatus } from "@/data/dummy-data";
+import { dashboardApi } from "@/lib/api";
+import { type OrderStatus } from "@/data/dummy-data";
 
-const kpis = [
-  { labelEn: "Total Inventory Value", labelMm: "စုစုပေါင်းတန်ဖိုး", value: "၁၂၅,၄၅၀,၀၀၀ ကျပ်", rawValue: "125,450,000 MMK", icon: Package, change: "+12%", up: true, color: "text-primary" },
-  { labelEn: "Pending Orders", labelMm: "ဆိုင်းငံ့မှာယူမှု", value: "23", icon: ShoppingCart, change: "+5", up: true, color: "text-info" },
-  { labelEn: "Shipments In Transit", labelMm: "ပို့ဆောင်ဆဲ", value: "8", icon: Truck, change: "-2", up: false, color: "text-accent" },
-  { labelEn: "Low Stock Alerts", labelMm: "စတော့နည်းနေသည်", value: "5", icon: AlertTriangle, change: "+3", up: true, color: "text-destructive", badge: true },
-];
+const formatMMK = (amount: number): string => `${amount.toLocaleString()} ကျပ်`;
 
 const statusColors: Record<OrderStatus, string> = {
   pending: "status-badge-pending",
@@ -25,6 +22,33 @@ const cardVariant = {
 };
 
 export default function Dashboard() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    dashboardApi.get()
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const kpis = [
+    { labelEn: "Total Inventory Value", labelMm: "စုစုပေါင်းတန်ဖိုး", value: formatMMK(data.kpis.totalInventoryValue), icon: Package, change: "+12%", up: true, color: "text-primary" },
+    { labelEn: "Pending Orders", labelMm: "ဆိုင်းငံ့မှာယူမှု", value: String(data.kpis.pendingOrders), icon: ShoppingCart, change: "+5", up: true, color: "text-info" },
+    { labelEn: "Shipments In Transit", labelMm: "ပို့ဆောင်ဆဲ", value: String(data.kpis.shipmentsInTransit), icon: Truck, change: "-2", up: false, color: "text-accent" },
+    { labelEn: "Low Stock Alerts", labelMm: "စတော့နည်းနေသည်", value: String(data.kpis.lowStockAlerts), icon: AlertTriangle, change: `${data.kpis.lowStockAlerts}`, up: true, color: "text-destructive", badge: true },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -32,17 +56,9 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground font-myanmar">ဒက်ရှ်ဘုတ် - လုပ်ငန်းခြုံငုံသုံးသပ်ချက်</p>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((kpi, i) => (
-          <motion.div
-            key={kpi.labelEn}
-            custom={i}
-            initial="hidden"
-            animate="visible"
-            variants={cardVariant}
-            className="card-elevated p-5 relative overflow-hidden"
-          >
+          <motion.div key={kpi.labelEn} custom={i} initial="hidden" animate="visible" variants={cardVariant} className="card-elevated p-5 relative overflow-hidden">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">{kpi.labelEn}</p>
@@ -69,14 +85,12 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Sales Trend */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card-elevated p-5">
           <h3 className="font-semibold mb-1">Monthly Sales Trend</h3>
           <p className="text-xs text-muted-foreground font-myanmar mb-4">လစဉ်ရောင်းချမှုလမ်းကြောင်း</p>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={monthlySalesData}>
+            <LineChart data={data.monthlySalesData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
@@ -86,12 +100,11 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Top Products */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card-elevated p-5">
           <h3 className="font-semibold mb-1">Top 5 Products by Quantity</h3>
           <p className="text-xs text-muted-foreground font-myanmar mb-4">ထိပ်တန်းထုတ်ကုန် ၅ ခု</p>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={topProductsData} layout="vertical">
+            <BarChart data={data.topProducts} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
@@ -102,9 +115,7 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Recent Orders + Low Stock */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent Orders Table */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="card-elevated p-5 lg:col-span-2">
           <h3 className="font-semibold mb-1">Recent Orders</h3>
           <p className="text-xs text-muted-foreground font-myanmar mb-4">မကြာသေးမီ မှာယူမှုများ</p>
@@ -120,14 +131,14 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentOrders.map((order) => (
+                {data.recentOrders.map((order: any) => (
                   <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="py-3 font-mono-data text-xs">{order.poNumber}</td>
                     <td className="py-3">{order.supplier}</td>
                     <td className="py-3 text-muted-foreground">{order.orderDate}</td>
                     <td className="py-3 text-right font-mono-data">{formatMMK(order.totalAmount)}</td>
                     <td className="py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status as OrderStatus] || ''}`}>
                         {order.status}
                       </span>
                     </td>
@@ -138,7 +149,6 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Low Stock Alerts */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="card-elevated p-5">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-4 h-4 text-destructive" />
@@ -146,7 +156,7 @@ export default function Dashboard() {
           </div>
           <p className="text-xs text-muted-foreground font-myanmar mb-4">စတော့နည်းနေသောပစ္စည်းများ</p>
           <div className="space-y-3">
-            {lowStockItems.map((item) => (
+            {data.lowStockItems.map((item: any) => (
               <div key={item.id} className="flex items-center justify-between p-3 rounded-md bg-muted/50 border">
                 <div>
                   <p className="text-sm font-medium">{item.nameEn}</p>

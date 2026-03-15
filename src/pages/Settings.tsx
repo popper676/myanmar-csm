@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Save, Plus, X, Upload } from "lucide-react";
+import { Save, Plus, X, Upload, Loader2 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
+import { settingsApi } from "@/lib/api";
 
 const tabList = [
   { key: "company", label: "Company Profile", labelMm: "ကုမ္ပဏီပရိုဖိုင်" },
@@ -10,33 +11,91 @@ const tabList = [
   { key: "notifications", label: "Notifications", labelMm: "အကြောင်းကြားချက်" },
 ];
 
-const users = [
-  { name: "Aung Min", role: "Admin", dept: "Management", status: "active", lastLogin: "2024-01-15 09:30" },
-  { name: "Khin Mar", role: "Manager", dept: "Inventory", status: "active", lastLogin: "2024-01-15 08:15" },
-  { name: "Zaw Htet", role: "Staff", dept: "Warehouse", status: "active", lastLogin: "2024-01-14 16:45" },
-  { name: "Myat Noe", role: "Viewer", dept: "Finance", status: "inactive", lastLogin: "2024-01-10 11:00" },
-  { name: "Thida Win", role: "Staff", dept: "Procurement", status: "active", lastLogin: "2024-01-15 07:00" },
-];
-
-const warehousesList = [
-  { name: "Yangon Main Warehouse", location: "Insein Township, Yangon", capacity: "10,000 sqft", manager: "U Kyaw Zin" },
-  { name: "Mandalay Hub", location: "Chanmyathazi, Mandalay", capacity: "8,000 sqft", manager: "U Aung Naing" },
-  { name: "Bago Depot", location: "Bago Township, Bago", capacity: "5,000 sqft", manager: "U Min Thu" },
-  { name: "Mawlamyine Store", location: "Mawlamyine, Mon State", capacity: "3,000 sqft", manager: "U Soe Lin" },
-];
-
-const permissions = [
-  { feature: "Dashboard", admin: true, manager: true, staff: true, viewer: true },
-  { feature: "Inventory", admin: true, manager: true, staff: true, viewer: false },
-  { feature: "Purchase Orders", admin: true, manager: true, staff: false, viewer: false },
-  { feature: "Shipments", admin: true, manager: true, staff: true, viewer: true },
-  { feature: "Reports", admin: true, manager: true, staff: false, viewer: false },
-  { feature: "Settings", admin: true, manager: false, staff: false, viewer: false },
-];
-
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("company");
   const [showAddWarehouse, setShowAddWarehouse] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [company, setCompany] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [warehousesList, setWarehousesList] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [companyData, usersData, warehousesData, notifData, permsData] = await Promise.all([
+          settingsApi.getCompany(),
+          settingsApi.getUsers(),
+          settingsApi.getWarehouses(),
+          settingsApi.getNotifications(),
+          settingsApi.getPermissions(),
+        ]);
+        setCompany(companyData);
+        setUsers(usersData);
+        setWarehousesList(warehousesData);
+        setNotifications(notifData);
+        setPermissions(permsData);
+      } catch (err) {
+        console.error("Failed to fetch settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleSaveCompany = async () => {
+    try {
+      await settingsApi.updateCompany(company);
+    } catch (err) {
+      console.error("Failed to save company:", err);
+    }
+  };
+
+  const handleSaveWarehouse = async () => {
+    try {
+      await settingsApi.createWarehouse({});
+      setShowAddWarehouse(false);
+      const data = await settingsApi.getWarehouses();
+      setWarehousesList(data);
+    } catch (err) {
+      console.error("Failed to save warehouse:", err);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    try {
+      await settingsApi.updateNotifications(notifications);
+    } catch (err) {
+      console.error("Failed to save notifications:", err);
+    }
+  };
+
+  const handleSavePermissions = async () => {
+    try {
+      await settingsApi.updatePermissions(permissions);
+    } catch (err) {
+      console.error("Failed to save permissions:", err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const companyFields = [
+    { label: "Company Name", value: company?.name || "" },
+    { label: "Phone", value: company?.phone || "" },
+    { label: "Email", value: company?.email || "" },
+    { label: "Address", value: company?.address || "" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -68,12 +127,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: "Company Name", value: "Myanmar Supply Chain Co., Ltd." },
-                { label: "Phone", value: "+95-9-123456789" },
-                { label: "Email", value: "info@myanmarscm.mm" },
-                { label: "Address", value: "No. 123, Bogyoke Aung San Road, Pabedan Tsp, Yangon" },
-              ].map((f) => (
+              {companyFields.map((f) => (
                 <div key={f.label}>
                   <label className="text-sm font-medium">{f.label}</label>
                   <input defaultValue={f.value} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
@@ -83,24 +137,24 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium">Currency</label>
-                <select className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                <select defaultValue={company?.currency || "MMK ကျပ်"} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                   <option>MMK ကျပ်</option><option>USD</option><option>THB</option>
                 </select>
               </div>
               <div>
                 <label className="text-sm font-medium">Language</label>
-                <select className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                <select defaultValue={company?.language || "English / မြန်မာ"} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                   <option>English / မြန်မာ</option><option>English</option><option>မြန်မာ</option>
                 </select>
               </div>
               <div>
                 <label className="text-sm font-medium">Fiscal Year Start</label>
-                <select className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                <select defaultValue={company?.fiscalYearStart || "January"} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                   {["January", "April", "July", "October"].map((m) => <option key={m}>{m}</option>)}
                 </select>
               </div>
             </div>
-            <button className="gold-button flex items-center gap-2"><Save className="w-4 h-4" /> Save Changes</button>
+            <button onClick={handleSaveCompany} className="gold-button flex items-center gap-2"><Save className="w-4 h-4" /> Save Changes</button>
           </div>
         )}
 
@@ -122,7 +176,7 @@ export default function SettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {users.map((u: any) => (
                     <tr key={u.name} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="p-3 font-medium">{u.name}</td>
                       <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary">{u.role}</span></td>
@@ -149,10 +203,10 @@ export default function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {permissions.map((p) => (
+                    {permissions.map((p: any) => (
                       <tr key={p.feature} className="border-b last:border-0">
                         <td className="p-2">{p.feature}</td>
-                        {[p.admin, p.manager, p.staff, p.viewer].map((v, i) => (
+                        {[p.admin, p.manager, p.staff, p.viewer].map((v: boolean, i: number) => (
                           <td key={i} className="p-2 text-center"><input type="checkbox" defaultChecked={v} className="rounded" /></td>
                         ))}
                       </tr>
@@ -160,7 +214,7 @@ export default function SettingsPage() {
                   </tbody>
                 </table>
               </div>
-              <button className="gold-button flex items-center gap-2 mt-4"><Save className="w-4 h-4" /> Save Permissions</button>
+              <button onClick={handleSavePermissions} className="gold-button flex items-center gap-2 mt-4"><Save className="w-4 h-4" /> Save Permissions</button>
             </div>
           </div>
         )}
@@ -181,7 +235,7 @@ export default function SettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {warehousesList.map((w) => (
+                {warehousesList.map((w: any) => (
                   <tr key={w.name} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="p-3 font-medium">{w.name}</td>
                     <td className="p-3 text-muted-foreground">{w.location}</td>
@@ -197,12 +251,7 @@ export default function SettingsPage() {
         {activeTab === "notifications" && (
           <div className="card-elevated p-6 space-y-6">
             <h3 className="font-semibold">Notification Preferences</h3>
-            {[
-              { label: "Low Stock Alerts", labelMm: "စတော့နည်းသောသတိပေးချက်", email: true, sms: false },
-              { label: "New PO Received", labelMm: "မှာယူလွှာအသစ်လက်ခံရရှိ", email: true, sms: true },
-              { label: "Shipment Delayed", labelMm: "ပေးပို့မှုနောက်ကျခြင်း", email: true, sms: true },
-              { label: "Payment Due", labelMm: "ငွေပေးချေရန်", email: true, sms: false },
-            ].map((n) => (
+            {notifications.map((n: any) => (
               <div key={n.label} className="flex items-center justify-between py-3 border-b last:border-0">
                 <div>
                   <p className="text-sm font-medium">{n.label}</p>
@@ -224,7 +273,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             ))}
-            <button className="gold-button flex items-center gap-2"><Save className="w-4 h-4" /> Save Preferences</button>
+            <button onClick={handleSaveNotifications} className="gold-button flex items-center gap-2"><Save className="w-4 h-4" /> Save Preferences</button>
           </div>
         )}
       </motion.div>
@@ -248,7 +297,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowAddWarehouse(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
-                <button className="gold-button">Save</button>
+                <button onClick={handleSaveWarehouse} className="gold-button">Save</button>
               </div>
             </motion.div>
           </motion.div>

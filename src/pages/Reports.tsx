@@ -1,34 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Download, FileText, Calendar } from "lucide-react";
+import { Download, FileText, Calendar, Loader2 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { formatMMK } from "@/data/dummy-data";
+import { reportApi } from "@/lib/api";
 
-const turnoverData = [
-  { month: "Aug", rate: 3.2 }, { month: "Sep", rate: 2.8 }, { month: "Oct", rate: 4.1 },
-  { month: "Nov", rate: 3.5 }, { month: "Dec", rate: 4.8 }, { month: "Jan", rate: 5.2 },
-];
-
-const movingProducts = [
-  { name: "Jasmine Rice", fast: 5000, slow: 0 },
-  { name: "Cheroot Cigars", fast: 2000, slow: 0 },
-  { name: "Shrimp Paste", fast: 800, slow: 0 },
-  { name: "Lacquerware", fast: 0, slow: 60 },
-  { name: "Silk Fabric", fast: 0, slow: 25 },
-  { name: "Teak Wood", fast: 0, slow: 120 },
-  { name: "Green Tea", fast: 1500, slow: 0 },
-  { name: "Cooking Oil", fast: 200, slow: 0 },
-  { name: "Betel Nut", fast: 0, slow: 45 },
-  { name: "Rubber", fast: 0, slow: 2000 },
-];
-
-const costBreakdown = [
-  { name: "Food", value: 45, color: "hsl(var(--primary))" },
-  { name: "Textile", value: 20, color: "hsl(var(--accent))" },
-  { name: "Raw Material", value: 18, color: "hsl(var(--info))" },
-  { name: "Handicraft", value: 10, color: "hsl(var(--success))" },
-  { name: "Spices", value: 7, color: "hsl(var(--destructive))" },
-];
+const formatMMK = (amount: number): string => `${amount.toLocaleString()} ကျပ်`;
 
 const reportCards = [
   { title: "Inventory Valuation Report", titleMm: "သိုလှောင်ရုံတန်ဖိုးအစီရင်ခံစာ", icon: FileText },
@@ -41,6 +17,42 @@ const dateRanges = ["This Week", "This Month", "This Quarter", "Custom"];
 
 export default function Reports() {
   const [dateRange, setDateRange] = useState("This Month");
+  const [loading, setLoading] = useState(true);
+  const [summaryStats, setSummaryStats] = useState<any[]>([]);
+  const [turnoverData, setTurnoverData] = useState<any[]>([]);
+  const [costBreakdown, setCostBreakdown] = useState<any[]>([]);
+  const [movingProducts, setMovingProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true);
+      try {
+        const [summary, turnover, cost, moving] = await Promise.all([
+          reportApi.summary(),
+          reportApi.turnover(),
+          reportApi.costBreakdown(),
+          reportApi.movingProducts(),
+        ]);
+        setSummaryStats(summary);
+        setTurnoverData(turnover);
+        setCostBreakdown(cost);
+        setMovingProducts(moving);
+      } catch (err) {
+        console.error("Failed to fetch reports:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAll();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -64,11 +76,7 @@ export default function Reports() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: "Total Purchases This Month", labelMm: "ယခုလဝယ်ယူမှုစုစုပေါင်း", value: "၆၇,၈၅၀,၀၀၀ ကျပ်" },
-          { label: "Active Suppliers", labelMm: "လက်ရှိကုန်ပေးသူ", value: "14" },
-          { label: "Inventory Accuracy", labelMm: "သိုလှောင်ရုံတိကျမှု", value: "96.8%" },
-        ].map((stat, i) => (
+        {summaryStats.map((stat: any, i: number) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }} className="card-elevated p-5">
             <p className="text-sm text-muted-foreground">{stat.label}</p>
             <p className="text-xs font-myanmar text-muted-foreground">{stat.labelMm}</p>
@@ -113,7 +121,7 @@ export default function Reports() {
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={costBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                {costBreakdown.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                {costBreakdown.map((entry: any) => <Cell key={entry.name} fill={entry.color} />)}
               </Pie>
               <Tooltip formatter={(value: number) => [`${value}%`, "Share"]} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
               <Legend verticalAlign="bottom" height={36} />

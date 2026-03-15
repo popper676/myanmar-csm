@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Package, ShoppingCart, Truck, DollarSign, CreditCard, BarChart3, Settings, Menu, X, ChevronDown
+  LayoutDashboard, Package, ShoppingCart, Truck, DollarSign, CreditCard, BarChart3, Settings, X, LogOut
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   { path: "/", labelEn: "Dashboard", labelMm: "ဒက်ရှ်ဘုတ်", icon: LayoutDashboard },
@@ -18,10 +18,20 @@ const menuItems = [
 
 export default function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
+  const initials = user?.fullName
+    ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase()
+    : 'U';
 
   return (
     <>
-      {/* Mobile overlay */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -39,7 +49,6 @@ export default function AppSidebar({ open, onClose }: { open: boolean; onClose: 
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between h-[60px] px-5 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-md bg-accent flex items-center justify-center">
@@ -55,7 +64,6 @@ export default function AppSidebar({ open, onClose }: { open: boolean; onClose: 
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -80,16 +88,18 @@ export default function AppSidebar({ open, onClose }: { open: boolean; onClose: 
           })}
         </nav>
 
-        {/* Footer */}
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-semibold">
-              AM
+              {initials}
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium truncate">Admin Manager</p>
-              <p className="text-[10px] opacity-60">admin@myanmarscm.mm</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium truncate">{user?.fullName || 'User'}</p>
+              <p className="text-[10px] opacity-60 truncate">{user?.email || ''}</p>
             </div>
+            <button onClick={handleLogout} className="p-1.5 rounded hover:bg-sidebar-accent" title="Logout">
+              <LogOut className="w-3.5 h-3.5 opacity-70" />
+            </button>
           </div>
         </div>
       </aside>

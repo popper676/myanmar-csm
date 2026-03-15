@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Star, List, LayoutGrid, MapPin, Phone, Mail, X } from "lucide-react";
-import { suppliers } from "@/data/dummy-data";
+import { Plus, Search, Star, List, LayoutGrid, MapPin, Phone, Mail, X, Loader2 } from "lucide-react";
+import { supplierApi } from "@/lib/api";
 import { AnimatePresence } from "framer-motion";
+
+const categories = ['Food', 'Textile', 'Cosmetics', 'Tobacco', 'Spices', 'Handicraft', 'Raw Material', 'General'];
 
 export default function Suppliers() {
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -11,16 +13,40 @@ export default function Suppliers() {
   const [regionFilter, setRegionFilter] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const cats = [...new Set(suppliers.map((s) => s.category))];
-  const filtered = suppliers.filter((s) => {
-    const matchSearch = !search || s.nameEn.toLowerCase().includes(search.toLowerCase()) || s.nameMm.includes(search);
-    const matchCat = !catFilter || s.category === catFilter;
-    const matchRegion = !regionFilter || s.region === regionFilter;
-    return matchSearch && matchCat && matchRegion;
-  });
+  const fetchSuppliers = async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (catFilter) params.category = catFilter;
+      if (regionFilter) params.region = regionFilter;
+      const data = await supplierApi.list(params);
+      setSuppliers(data);
+    } catch (err) {
+      console.error("Failed to fetch suppliers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const detail = selectedSupplier ? suppliers.find((s) => s.id === selectedSupplier) : null;
+  useEffect(() => {
+    fetchSuppliers();
+  }, [search, catFilter, regionFilter]);
+
+  const handleCreateSupplier = async () => {
+    try {
+      await supplierApi.create({});
+      setShowAdd(false);
+      fetchSuppliers();
+    } catch (err) {
+      console.error("Failed to create supplier:", err);
+    }
+  };
+
+  const detail = selectedSupplier ? suppliers.find((s: any) => s.id === selectedSupplier) : null;
 
   const StarRating = ({ rating }: { rating: number }) => (
     <div className="flex gap-0.5">
@@ -50,7 +76,7 @@ export default function Suppliers() {
         </div>
         <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="px-3 py-2 rounded-md border bg-card text-sm">
           <option value="">All Categories</option>
-          {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="px-3 py-2 rounded-md border bg-card text-sm">
           <option value="">All Regions</option>
@@ -63,10 +89,16 @@ export default function Suppliers() {
         </div>
       </div>
 
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+      <>
       {/* Grid/List */}
       {view === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((s, i) => (
+          {suppliers.map((s: any, i: number) => (
             <motion.div key={s.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="card-elevated p-5 cursor-pointer hover:border-accent/50" onClick={() => setSelectedSupplier(s.id)}>
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">{s.nameEn.charAt(0)}</div>
@@ -99,7 +131,7 @@ export default function Suppliers() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
+              {suppliers.map((s: any) => (
                 <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedSupplier(s.id)}>
                   <td className="p-3"><p className="font-medium">{s.nameEn}</p><p className="text-xs font-myanmar text-muted-foreground">{s.nameMm}</p></td>
                   <td className="p-3 text-muted-foreground text-xs">{s.township}, {s.city}</td>
@@ -112,6 +144,8 @@ export default function Suppliers() {
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
 
       {/* Supplier Detail Drawer */}
@@ -183,7 +217,7 @@ export default function Suppliers() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
-                <button className="gold-button">Save Supplier</button>
+                <button onClick={handleCreateSupplier} className="gold-button">Save Supplier</button>
               </div>
             </motion.div>
           </motion.div>

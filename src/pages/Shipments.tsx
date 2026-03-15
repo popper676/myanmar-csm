@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Filter, Truck } from "lucide-react";
-import { shipments, myanmarCities, type ShipmentStatus } from "@/data/dummy-data";
+import { Plus, X, Filter, Truck, Loader2 } from "lucide-react";
+import { shipmentApi } from "@/lib/api";
+import type { ShipmentStatus } from "@/data/dummy-data";
 
 const statusSteps: ShipmentStatus[] = ["ordered", "dispatched", "in_transit", "customs", "delivered"];
 const statusLabels: Record<ShipmentStatus, string> = { ordered: "Ordered", dispatched: "Dispatched", in_transit: "In Transit", customs: "Customs", delivered: "Delivered" };
@@ -10,8 +11,49 @@ const statusColors: Record<ShipmentStatus, string> = { ordered: "bg-muted-foregr
 export default function Shipments() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [showAdd, setShowAdd] = useState(false);
+  const [shipments, setShipments] = useState<any[]>([]);
+  const [cities, setCities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = statusFilter ? shipments.filter((s) => s.status === statusFilter) : shipments;
+  const fetchShipments = async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (statusFilter) params.status = statusFilter;
+      const data = await shipmentApi.list(params);
+      setShipments(data);
+    } catch (err) {
+      console.error("Failed to fetch shipments:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchShipments();
+  }, [statusFilter]);
+
+  useEffect(() => {
+    shipmentApi.cities().then(setCities).catch(console.error);
+  }, []);
+
+  const handleCreateShipment = async () => {
+    try {
+      await shipmentApi.create({});
+      setShowAdd(false);
+      fetchShipments();
+    } catch (err) {
+      console.error("Failed to create shipment:", err);
+    }
+  };
+
+  if (loading && shipments.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -46,7 +88,7 @@ export default function Shipments() {
               <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="hsl(var(--border))" strokeWidth="0.5" strokeDasharray="2 1" />
             ))}
             {/* City nodes */}
-            {myanmarCities.map((city) => (
+            {cities.map((city: any) => (
               <g key={city.en}>
                 <circle cx={city.x} cy={city.y} r="2.5" fill="hsl(var(--primary))" className="drop-shadow-sm" />
                 <text x={city.x} y={city.y - 4} textAnchor="middle" className="fill-foreground" style={{ fontSize: "3px", fontWeight: 600 }}>{city.en}</text>
@@ -54,9 +96,9 @@ export default function Shipments() {
               </g>
             ))}
             {/* Active shipment indicators */}
-            {filtered.filter((s) => s.status === "in_transit").map((s, i) => {
-              const from = myanmarCities.find((c) => c.en === s.from.en);
-              const to = myanmarCities.find((c) => c.en === s.to.en);
+            {shipments.filter((s: any) => s.status === "in_transit").map((s: any) => {
+              const from = cities.find((c: any) => c.en === s.from.en);
+              const to = cities.find((c: any) => c.en === s.to.en);
               if (!from || !to) return null;
               const mx = (from.x + to.x) / 2;
               const my = (from.y + to.y) / 2;
@@ -68,13 +110,13 @@ export default function Shipments() {
 
       {/* Shipment Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.length === 0 ? (
+        {shipments.length === 0 ? (
           <div className="col-span-full text-center py-12 text-muted-foreground">
             <Truck className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="font-myanmar">ပေးပို့မှု မရှိသေးပါ</p>
             <p className="text-xs mt-1">No shipments found</p>
           </div>
-        ) : filtered.map((shipment, i) => (
+        ) : shipments.map((shipment: any, i: number) => (
           <motion.div key={shipment.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card-elevated p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -135,8 +177,8 @@ export default function Shipments() {
               </div>
               <div className="space-y-4">
                 {[
-                  { label: "From", type: "select", options: myanmarCities.map((c) => `${c.en} (${c.mm})`) },
-                  { label: "To", type: "select", options: myanmarCities.map((c) => `${c.en} (${c.mm})`) },
+                  { label: "From", type: "select", options: cities.map((c: any) => `${c.en} (${c.mm})`) },
+                  { label: "To", type: "select", options: cities.map((c: any) => `${c.en} (${c.mm})`) },
                   { label: "Carrier", type: "text" },
                   { label: "Dispatch Date", type: "date" },
                   { label: "Expected Arrival", type: "date" },
@@ -155,7 +197,7 @@ export default function Shipments() {
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
-                <button className="gold-button">Add Shipment</button>
+                <button onClick={handleCreateShipment} className="gold-button">Add Shipment</button>
               </div>
             </motion.div>
           </motion.div>
