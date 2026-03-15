@@ -24,7 +24,7 @@ export default function Suppliers() {
       if (catFilter) params.category = catFilter;
       if (regionFilter) params.region = regionFilter;
       const data = await supplierApi.list(params);
-      setSuppliers(data);
+      setSuppliers(Array.isArray(data) ? data : data.suppliers || []);
     } catch (err) {
       console.error("Failed to fetch suppliers:", err);
     } finally {

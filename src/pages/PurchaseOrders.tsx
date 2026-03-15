@@ -39,7 +39,7 @@ export default function PurchaseOrders() {
       const params: Record<string, string> = {};
       if (tab !== "all") params.status = tab;
       const data = await purchaseOrderApi.list(params);
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : data.orders || []);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
     } finally {
@@ -50,7 +50,7 @@ export default function PurchaseOrders() {
   const fetchAllOrders = async () => {
     try {
       const data = await purchaseOrderApi.list();
-      setAllOrders(data);
+      setAllOrders(Array.isArray(data) ? data : data.orders || []);
     } catch (err) {
       console.error("Failed to fetch all orders:", err);
     }
@@ -66,7 +66,9 @@ export default function PurchaseOrders() {
   }, [activeTab]);
 
   useEffect(() => {
-    supplierApi.list().then(setSuppliersList).catch(console.error);
+    supplierApi.list().then((data: any) => {
+      setSuppliersList(Array.isArray(data) ? data : data.suppliers || []);
+    }).catch(console.error);
   }, []);
 
   const handleStatusChange = async (e: React.MouseEvent, orderId: string, status: string) => {

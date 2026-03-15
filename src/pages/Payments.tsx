@@ -13,7 +13,7 @@ const statusStyle: Record<string, string> = {
 
 export default function Payments() {
   const [payments, setPayments] = useState<any[]>([]);
-  const [summary, setSummary] = useState<any[]>([]);
+  const [summaryData, setSummaryData] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -23,8 +23,8 @@ export default function Payments() {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       const data = await paymentApi.list(params);
-      if (data.summary) setSummary(data.summary);
-      setPayments(data.payments || data);
+      setPayments(Array.isArray(data) ? data : data.payments || []);
+      if (data.summary) setSummaryData(data.summary);
     } catch (err) {
       console.error("Failed to fetch payments:", err);
     } finally {
@@ -51,13 +51,15 @@ export default function Payments() {
     }
   };
 
-  const defaultSummary = [
-    { label: "Total Paid This Month", labelMm: "ယခုလပေးချေပြီး", value: "၃၂,၆၀၀,၀၀၀ ကျပ်", change: "+18%", up: true },
-    { label: "Pending Payments", labelMm: "ဆိုင်းငံ့ငွေပေးချေမှု", value: "၁၅,၇၅၀,၀၀၀ ကျပ်", change: "2 payments", up: false },
-    { label: "Overdue Payments", labelMm: "သတ်မှတ်ရက်ကျော်", value: "၄,၅၀၀,၀၀၀ ကျပ်", change: "1 payment", up: true },
+  const summaryCards = summaryData ? [
+    { label: "Total Paid", labelMm: "ယခုလပေးချေပြီး", value: formatMMK(summaryData.totalPaid || 0), change: "+18%", up: true },
+    { label: "Pending Payments", labelMm: "ဆိုင်းငံ့ငွေပေးချေမှု", value: formatMMK(summaryData.totalPending || 0), change: `${summaryData.pendingCount || 0} payments`, up: false },
+    { label: "Failed Payments", labelMm: "မအောင်မြင်သောငွေပေးချေမှု", value: formatMMK(summaryData.totalFailed || 0), change: `${summaryData.failedCount || 0} payments`, up: true },
+  ] : [
+    { label: "Total Paid", labelMm: "ယခုလပေးချေပြီး", value: "–", change: "", up: true },
+    { label: "Pending Payments", labelMm: "ဆိုင်းငံ့ငွေပေးချေမှု", value: "–", change: "", up: false },
+    { label: "Failed Payments", labelMm: "မအောင်မြင်သောငွေပေးချေမှု", value: "–", change: "", up: true },
   ];
-
-  const summaryCards = summary.length > 0 ? summary : defaultSummary;
 
   return (
     <div className="space-y-6">
@@ -115,7 +117,7 @@ export default function Payments() {
                 <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No payments found</td></tr>
               ) : payments.map((p: any) => (
                 <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="p-3 font-mono-data text-xs">{p.id}</td>
+                  <td className="p-3 font-mono-data text-xs">{p.paymentId || p.id}</td>
                   <td className="p-3">{p.supplier}</td>
                   <td className="p-3 text-muted-foreground">{p.date}</td>
                   <td className="p-3 text-right font-mono-data">{formatMMK(p.amount)}</td>
