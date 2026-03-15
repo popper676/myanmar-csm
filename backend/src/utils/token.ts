@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config';
 
@@ -9,19 +9,21 @@ export interface TokenPayload {
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn,
+  const options: SignOptions = {
+    expiresIn: config.jwt.expiresIn as any,
     issuer: 'myanscm-api',
     audience: 'myanscm-client',
-  });
+  };
+  return jwt.sign(payload, config.jwt.secret as Secret, options);
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiresIn,
+  const options: SignOptions = {
+    expiresIn: config.jwt.refreshExpiresIn as any,
     issuer: 'myanscm-api',
     audience: 'myanscm-client',
-  });
+  };
+  return jwt.sign(payload, config.jwt.refreshSecret as Secret, options);
 }
 
 export function verifyAccessToken(token: string): TokenPayload {
