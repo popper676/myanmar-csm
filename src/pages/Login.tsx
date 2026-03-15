@@ -39,7 +39,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(153 55% 23%) 0%, hsl(153 55% 15%) 50%, hsl(153 40% 10%) 100%)" }}>
-      <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M30 0L60 30L30 60L0 30z' fill-opacity='0.3'/%3E%3C/g%3E%3C/svg%3E")` }} />
+      <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M30 0L60 30L30 60L0 30z' fill-opacity='0.3'/%3E%3C/g%3E%3C/svg%3E")` }} />
 
       <div className="absolute top-4 right-4">
         <button onClick={() => setLang(lang === "en" ? "mm" : "en")} className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors" style={{ background: "hsla(0,0%,100%,0.15)", color: "hsl(60 24% 96%)" }}>
@@ -47,7 +47,7 @@ export default function Login() {
         </button>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-sm">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-sm relative z-10">
         <form onSubmit={handleLogin} className="bg-card rounded-xl shadow-2xl p-8">
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 rounded-xl bg-primary flex items-center justify-center mb-4 shadow-lg">
@@ -66,7 +66,7 @@ export default function Login() {
           <div className="space-y-4">
             <div>
               <label className={`text-sm font-medium ${lang === "mm" ? "font-myanmar" : ""}`}>{t[lang].email}</label>
-              <input value={username} onChange={e => setUsername(e.target.value)} className="w-full mt-1 px-3 py-2.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="admin" />
+              <input type="text" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} className="w-full mt-1 px-3 py-2.5 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="csmmaster" />
             </div>
             <div>
               <label className={`text-sm font-medium ${lang === "mm" ? "font-myanmar" : ""}`}>{t[lang].password}</label>
