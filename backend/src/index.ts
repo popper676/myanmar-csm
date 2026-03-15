@@ -115,8 +115,8 @@ async function start() {
   Status:      Running
 
   Default Login:
-    Username: admin
-    Password: admin123
+    Username: csmmaster
+    Password: csm!@#1256
       `);
     });
   } catch (error) {
