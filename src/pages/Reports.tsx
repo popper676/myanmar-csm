@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Download, FileText, Calendar, Loader2 } from "lucide-react";
+import { Download, FileText, Loader2, Check } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { reportApi } from "@/lib/api";
 
@@ -12,12 +12,32 @@ const PIE_COLORS = [
   '#8884d8', '#82ca9d', '#ffc658', '#ff8042',
 ];
 
-const reportCards = [
-  { title: "Inventory Valuation Report", titleMm: "သိုလှောင်ရုံတန်ဖိုးအစီရင်ခံစာ", icon: FileText },
-  { title: "Purchase Order Summary", titleMm: "မှာယူမှုအနှစ်ချုပ်", icon: FileText },
-  { title: "Supplier Performance Report", titleMm: "ကုန်ပေးသူစွမ်းဆောင်ရည်", icon: FileText },
-  { title: "Stock Movement Report", titleMm: "စတော့ရွေ့လျားမှု", icon: FileText },
-];
+function downloadCsv(filename: string, csvContent: string) {
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsv(val: any): string {
+  if (val == null) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function arrayToCsv(headers: string[], rows: any[][]): string {
+  const lines = [headers.map(escapeCsv).join(',')];
+  for (const row of rows) {
+    lines.push(row.map(escapeCsv).join(','));
+  }
+  return lines.join('\n');
+}
 
 const dateRanges = ["This Week", "This Month", "This Quarter", "Custom"];
 
@@ -28,6 +48,8 @@ export default function Reports() {
   const [turnoverData, setTurnoverData] = useState<any[]>([]);
   const [costBreakdown, setCostBreakdown] = useState<any[]>([]);
   const [movingProducts, setMovingProducts] = useState<any[]>([]);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -61,6 +83,101 @@ export default function Reports() {
     fetchAll();
   }, []);
 
+  const handleExportPdf = () => {
+    window.print();
+  };
+
+  const handleExportExcel = () => {
+    let csv = '';
+
+    csv += 'SUMMARY STATISTICS\n';
+    csv += arrayToCsv(['Metric', 'Value'], summaryStats.map(s => [s.label, s.value]));
+    csv += '\n\n';
+
+    csv += 'INVENTORY TURNOVER RATE\n';
+    csv += arrayToCsv(['Month', 'Rate'], turnoverData.map(t => [t.month, t.rate]));
+    csv += '\n\n';
+
+    csv += 'COST BREAKDOWN BY CATEGORY\n';
+    csv += arrayToCsv(['Category', 'Percentage (%)'], costBreakdown.map(c => [c.name, c.value]));
+    csv += '\n\n';
+
+    csv += 'FAST vs SLOW MOVING PRODUCTS\n';
+    csv += arrayToCsv(['Product', 'Fast Moving Qty', 'Slow Moving Qty'], movingProducts.map(p => [p.name, p.fast, p.slow]));
+
+    const date = new Date().toISOString().split('T')[0];
+    downloadCsv(`reports_analytics_${date}.csv`, csv);
+  };
+
+  const handleGenerateReport = async (reportKey: string) => {
+    setGenerating(reportKey);
+    setGenerated(null);
+    const date = new Date().toISOString().split('T')[0];
+
+    try {
+      switch (reportKey) {
+        case 'inventory-valuation': {
+          const data = await reportApi.inventoryValuation();
+          const items = data.items || [];
+          let csv = `INVENTORY VALUATION REPORT\nGenerated: ${date}\nTotal Value: ${formatMMK(data.totalValue || 0)}\n\n`;
+          csv += arrayToCsv(
+            ['Product Name', 'Category', 'Quantity', 'Unit Price (MMK)', 'Total Value (MMK)', 'Warehouse', 'Stock Status'],
+            items.map((i: any) => [i.name, i.category, i.quantity, i.unitPrice, i.totalValue, i.warehouse, i.stockStatus])
+          );
+          downloadCsv(`inventory_valuation_${date}.csv`, csv);
+          break;
+        }
+        case 'purchase-order-summary': {
+          const data = await reportApi.purchaseOrderSummary();
+          const statusRows = data.statusSummary || [];
+          const monthlyRows = data.monthlySummary || [];
+          let csv = `PURCHASE ORDER SUMMARY\nGenerated: ${date}\n\n`;
+          csv += 'STATUS SUMMARY\n';
+          csv += arrayToCsv(['Status', 'Count', 'Total Amount (MMK)'], statusRows.map((s: any) => [s.status, s.count, s.totalAmount]));
+          csv += '\n\nMONTHLY SUMMARY\n';
+          csv += arrayToCsv(['Month', 'Order Count', 'Total Amount (MMK)'], monthlyRows.map((m: any) => [m.month, m.count, m.totalAmount]));
+          downloadCsv(`purchase_order_summary_${date}.csv`, csv);
+          break;
+        }
+        case 'supplier-performance': {
+          const data = await reportApi.supplierPerformance();
+          const suppliers = Array.isArray(data) ? data : [];
+          let csv = `SUPPLIER PERFORMANCE REPORT\nGenerated: ${date}\n\n`;
+          csv += arrayToCsv(
+            ['Supplier Name', 'Category', 'Rating', 'Total Orders', 'On-Time Delivery (%)', 'Avg Lead Time (days)', 'Region'],
+            suppliers.map((s: any) => [s.name, s.category, s.rating, s.totalOrders, s.onTimeDelivery, s.avgLeadTime, s.region])
+          );
+          downloadCsv(`supplier_performance_${date}.csv`, csv);
+          break;
+        }
+        case 'stock-movement': {
+          const data = await reportApi.stockMovement();
+          const items = Array.isArray(data) ? data : [];
+          let csv = `STOCK MOVEMENT REPORT\nGenerated: ${date}\n\n`;
+          csv += arrayToCsv(
+            ['Product Name', 'Category', 'Quantity', 'Min Stock', 'Stock Status', 'Warehouse', 'Last Updated'],
+            items.map((i: any) => [i.name, i.category, i.quantity, i.minStock, i.stockStatus, i.warehouse, i.lastUpdated])
+          );
+          downloadCsv(`stock_movement_${date}.csv`, csv);
+          break;
+        }
+      }
+      setGenerated(reportKey);
+      setTimeout(() => setGenerated(null), 2000);
+    } catch (err) {
+      console.error(`Failed to generate ${reportKey}:`, err);
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const reportCards = [
+    { key: "inventory-valuation", title: "Inventory Valuation Report", titleMm: "သိုလှောင်ရုံတန်ဖိုးအစီရင်ခံစာ", icon: FileText },
+    { key: "purchase-order-summary", title: "Purchase Order Summary", titleMm: "မှာယူမှုအနှစ်ချုပ်", icon: FileText },
+    { key: "supplier-performance", title: "Supplier Performance Report", titleMm: "ကုန်ပေးသူစွမ်းဆောင်ရည်", icon: FileText },
+    { key: "stock-movement", title: "Stock Movement Report", titleMm: "စတော့ရွေ့လျားမှု", icon: FileText },
+  ];
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -77,8 +194,12 @@ export default function Reports() {
           <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">သတင်းအချက်အလက် အစီရင်ခံစာ</p>
         </div>
         <div className="flex gap-2 self-start">
-          <button className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border text-xs sm:text-sm hover:bg-muted"><Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Export to</span> PDF</button>
-          <button className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border text-xs sm:text-sm hover:bg-muted"><Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Export to</span> Excel</button>
+          <button onClick={handleExportPdf} className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border text-xs sm:text-sm hover:bg-muted">
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Export to</span> PDF
+          </button>
+          <button onClick={handleExportExcel} className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border text-xs sm:text-sm hover:bg-muted">
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Export to</span> Excel
+          </button>
         </div>
       </div>
 
@@ -103,11 +224,25 @@ export default function Reports() {
       {/* Report Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {reportCards.map((r, i) => (
-          <motion.div key={r.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }} className="card-elevated p-3 sm:p-5 cursor-pointer hover:border-accent/50 transition-colors">
+          <motion.div key={r.key} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + i * 0.06 }} className="card-elevated p-3 sm:p-5 cursor-pointer hover:border-accent/50 transition-colors">
             <r.icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary mb-2 sm:mb-3" />
             <h3 className="font-semibold text-xs sm:text-sm">{r.title}</h3>
             <p className="text-[10px] sm:text-xs font-myanmar text-muted-foreground mt-1 hidden sm:block">{r.titleMm}</p>
-            <button className="text-[10px] sm:text-xs text-accent font-medium mt-2 sm:mt-3 hover:underline">Generate →</button>
+            <button
+              onClick={() => handleGenerateReport(r.key)}
+              disabled={generating === r.key}
+              className="text-[10px] sm:text-xs text-accent font-medium mt-2 sm:mt-3 hover:underline flex items-center gap-1 disabled:opacity-60"
+            >
+              {generating === r.key ? (
+                <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
+              ) : generated === r.key ? (
+                <><Check className="w-3 h-3" /> Downloaded</>
+              ) : (
+                <>
+                  <Download className="w-3 h-3" /> Generate & Download
+                </>
+              )}
+            </button>
           </motion.div>
         ))}
       </div>
