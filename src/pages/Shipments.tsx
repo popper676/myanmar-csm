@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, Filter, Truck, Loader2 } from "lucide-react";
 import { shipmentApi } from "@/lib/api";
@@ -9,11 +10,19 @@ const statusLabels: Record<ShipmentStatus, string> = { ordered: "Ordered", dispa
 const statusColors: Record<ShipmentStatus, string> = { ordered: "bg-muted-foreground", dispatched: "bg-info", in_transit: "bg-accent", customs: "bg-warning-dark", delivered: "bg-success" };
 
 export default function Shipments() {
+  const routeLocation = useLocation();
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [showAdd, setShowAdd] = useState(false);
   const [shipments, setShipments] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (routeLocation.state?.openCreate === 'create-shipment') {
+      setShowAdd(true);
+      window.history.replaceState({}, '');
+    }
+  }, [routeLocation.state]);
 
   const fetchShipments = async () => {
     setLoading(true);
@@ -73,13 +82,13 @@ export default function Shipments() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Shipment Tracking</h1>
-          <p className="text-sm text-muted-foreground font-myanmar">ပေးပို့မှု ခြေရာခံမှု</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Shipment Tracking</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">ပေးပို့မှု ခြေရာခံမှု</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="gold-button flex items-center gap-2 self-start">
+        <button onClick={() => setShowAdd(true)} className="gold-button flex items-center gap-2 self-start text-sm">
           <Plus className="w-4 h-4" /> Add Shipment
         </button>
       </div>
@@ -134,47 +143,45 @@ export default function Shipments() {
             <p className="text-xs mt-1">No shipments found</p>
           </div>
         ) : shipments.map((shipment: any, i: number) => (
-          <motion.div key={shipment.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card-elevated p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="font-mono-data text-xs text-muted-foreground">{shipment.shipmentId}</p>
-                <p className="text-sm font-semibold mt-1">
-                  {shipment.from.en} <span className="font-myanmar text-xs">({shipment.from.mm})</span>
-                  {" → "}
-                  {shipment.to.en} <span className="font-myanmar text-xs">({shipment.to.mm})</span>
+          <motion.div key={shipment.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card-elevated p-3 sm:p-5">
+            <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono-data text-[10px] sm:text-xs text-muted-foreground">{shipment.shipmentId}</p>
+                <p className="text-xs sm:text-sm font-semibold mt-1">
+                  {shipment.from.en} → {shipment.to.en}
                 </p>
               </div>
               {shipment.daysRemaining > 0 && (
-                <span className="text-xs font-medium bg-accent/20 text-accent-foreground px-2 py-1 rounded font-myanmar">
-                  {shipment.daysRemaining} ရက် ကျန်
+                <span className="text-[10px] sm:text-xs font-medium bg-accent/20 text-accent-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded font-myanmar whitespace-nowrap flex-shrink-0">
+                  {shipment.daysRemaining} ရက်
                 </span>
               )}
             </div>
 
             {/* Timeline */}
-            <div className="flex items-center gap-1 mb-4">
+            <div className="flex items-center gap-0.5 sm:gap-1 mb-3 sm:mb-4">
               {statusSteps.map((step, si) => {
                 const currentIdx = statusSteps.indexOf(shipment.status);
                 const isActive = si === currentIdx;
                 const isPast = si < currentIdx;
                 return (
-                  <div key={step} className="flex items-center gap-1 flex-1">
-                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isPast || isActive ? statusColors[shipment.status] : "bg-muted"} ${isActive ? "animate-pulse-dot" : ""}`} />
+                  <div key={step} className="flex items-center gap-0.5 sm:gap-1 flex-1">
+                    <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${isPast || isActive ? statusColors[shipment.status] : "bg-muted"} ${isActive ? "animate-pulse-dot" : ""}`} />
                     {si < statusSteps.length - 1 && <div className={`h-0.5 flex-1 ${isPast ? statusColors[shipment.status] : "bg-muted"}`} />}
                   </div>
                 );
               })}
             </div>
-            <div className="flex justify-between text-[10px] text-muted-foreground mb-4">
+            <div className="flex justify-between text-[8px] sm:text-[10px] text-muted-foreground mb-3 sm:mb-4">
               {statusSteps.map((s) => <span key={s}>{statusLabels[s]}</span>)}
             </div>
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
-              <div>
+            <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground border-t pt-2 sm:pt-3">
+              <div className="min-w-0 flex-1 mr-2">
                 <span className="font-medium text-foreground">{shipment.carrier}</span>
-                <p className="font-mono-data mt-0.5">{shipment.trackingNumber}</p>
+                <p className="font-mono-data mt-0.5 truncate">{shipment.trackingNumber}</p>
               </div>
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <p>Dispatch: {shipment.dispatchDate}</p>
                 <p>ETA: {shipment.eta}</p>
               </div>

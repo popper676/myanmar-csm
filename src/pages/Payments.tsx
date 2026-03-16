@@ -62,22 +62,22 @@ export default function Payments() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Payments</h1>
-          <p className="text-sm text-muted-foreground font-myanmar">ကျပ်ပေး စီမံခန့်ခွဲမှု</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Payments</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">ကျပ်ပေး စီမံခန့်ခွဲမှု</p>
         </div>
-        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-muted"><Download className="w-4 h-4" /> Export</button>
+        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-2 rounded-md border text-sm hover:bg-muted self-start"><Download className="w-4 h-4" /> Export</button>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {summaryCards.map((s: any, i: number) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }} className="card-elevated p-5">
-            <p className="text-sm text-muted-foreground">{s.label}</p>
-            <p className="text-xs font-myanmar text-muted-foreground">{s.labelMm}</p>
-            <p className="text-xl font-bold mt-2">{s.value}</p>
+          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }} className="card-elevated p-3 sm:p-5">
+            <p className="text-xs sm:text-sm text-muted-foreground">{s.label}</p>
+            <p className="text-[10px] sm:text-xs font-myanmar text-muted-foreground">{s.labelMm}</p>
+            <p className="text-lg sm:text-xl font-bold mt-1 sm:mt-2">{s.value}</p>
             <div className="flex items-center gap-1 mt-1">
               {s.up ? <ArrowUpRight className="w-3 h-3 text-success" /> : <CreditCard className="w-3 h-3 text-warning-dark" />}
               <span className="text-xs text-muted-foreground">{s.change}</span>

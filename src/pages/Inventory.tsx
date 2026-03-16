@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Plus, ChevronLeft, ChevronRight, Trash2, Download, X, Loader2 } from "lucide-react";
 import { inventoryApi } from "@/lib/api";
@@ -13,6 +14,7 @@ const stockLabel: Record<StockStatus, { text: string; class: string }> = {
 };
 
 export default function Inventory() {
+  const routeLocation = useLocation();
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<string[]>([]);
@@ -28,6 +30,13 @@ export default function Inventory() {
   const [saving, setSaving] = useState(false);
 
   const [newItem, setNewItem] = useState({ nameEn: '', sku: '', category: 'Food', unit: 'kg', quantity: 0, minStock: 0, warehouseName: 'Yangon Main', unitPrice: 0, supplierName: '' });
+
+  useEffect(() => {
+    if (routeLocation.state?.openCreate === 'create-item') {
+      setShowAddModal(true);
+      window.history.replaceState({}, '');
+    }
+  }, [routeLocation.state]);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -86,13 +95,13 @@ export default function Inventory() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Inventory Management</h1>
-          <p className="text-sm text-muted-foreground font-myanmar">သိုလှောင်ရုံ စီမံခန့်ခွဲမှု</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Inventory Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">သိုလှောင်ရုံ စီမံခန့်ခွဲမှု</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="gold-button flex items-center gap-2 self-start">
+        <button onClick={() => setShowAddModal(true)} className="gold-button flex items-center gap-2 self-start text-sm">
           <Plus className="w-4 h-4" /> Add New Item
         </button>
       </div>
@@ -173,14 +182,23 @@ export default function Inventory() {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-sm">
-        <p className="text-muted-foreground">Showing {((page - 1) * 8) + 1}–{Math.min(page * 8, pagination.total)} of {pagination.total}</p>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 rounded-md border hover:bg-muted disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
-          {Array.from({ length: pagination.totalPages }, (_, i) => (
-            <button key={i} onClick={() => setPage(i + 1)} className={`w-8 h-8 rounded-md text-xs ${page === i + 1 ? "bg-primary text-primary-foreground" : "border hover:bg-muted"}`}>{i + 1}</button>
-          ))}
-          <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages} className="p-2 rounded-md border hover:bg-muted disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
+        <p className="text-muted-foreground text-xs sm:text-sm">Showing {((page - 1) * 8) + 1}–{Math.min(page * 8, pagination.total)} of {pagination.total}</p>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 sm:p-2 rounded-md border hover:bg-muted disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+          {Array.from({ length: pagination.totalPages }, (_, i) => {
+            if (pagination.totalPages > 5) {
+              if (i > 0 && i < pagination.totalPages - 1 && Math.abs(i + 1 - page) > 1) {
+                if (i === 1 && page > 3) return <span key={i} className="px-1 text-muted-foreground">...</span>;
+                if (i === pagination.totalPages - 2 && page < pagination.totalPages - 2) return <span key={i} className="px-1 text-muted-foreground">...</span>;
+                return null;
+              }
+            }
+            return (
+              <button key={i} onClick={() => setPage(i + 1)} className={`w-7 h-7 sm:w-8 sm:h-8 rounded-md text-xs ${page === i + 1 ? "bg-primary text-primary-foreground" : "border hover:bg-muted"}`}>{i + 1}</button>
+            );
+          })}
+          <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page === pagination.totalPages} className="p-1.5 sm:p-2 rounded-md border hover:bg-muted disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
         </div>
       </div>
 

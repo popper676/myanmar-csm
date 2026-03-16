@@ -61,13 +61,13 @@ export default function Suppliers() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Supplier Management</h1>
-          <p className="text-sm text-muted-foreground font-myanmar">ကုန်ပေးသူများ စီမံခန့်ခွဲမှု</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Supplier Management</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">ကုန်ပေးသူများ စီမံခန့်ခွဲမှု</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="gold-button flex items-center gap-2 self-start">
+        <button onClick={() => setShowAdd(true)} className="gold-button flex items-center gap-2 self-start text-sm">
           <Plus className="w-4 h-4" /> Add Supplier
         </button>
       </div>
@@ -123,7 +123,8 @@ export default function Suppliers() {
         </div>
       ) : (
         <div className="card-elevated overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="bg-muted/50 border-b">
                 <th className="p-3 text-left font-medium text-muted-foreground">Supplier</th>
@@ -147,6 +148,7 @@ export default function Suppliers() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       </>
@@ -156,8 +158,8 @@ export default function Suppliers() {
       <AnimatePresence>
         {detail && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex justify-end bg-foreground/50" onClick={() => setSelectedSupplier(null)}>
-            <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="w-full max-w-md bg-card h-full overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6">
+            <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }} className="w-full sm:max-w-md bg-card h-full overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 sm:p-6">
                 <div className="flex justify-between mb-6">
                   <div>
                     <h2 className="text-lg font-bold">{detail.nameEn}</h2>

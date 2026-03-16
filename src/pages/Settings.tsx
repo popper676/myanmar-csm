@@ -111,10 +111,10 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-sm text-muted-foreground font-myanmar">ဆက်တင် - စနစ်ပြင်ဆင်ချက်များ</p>
+        <h1 className="text-xl sm:text-2xl font-bold">Settings</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">ဆက်တင် - စနစ်ပြင်ဆင်ချက်များ</p>
       </div>
 
       {/* Tabs */}
@@ -172,13 +172,14 @@ export default function SettingsPage() {
         )}
 
         {activeTab === "users" && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="card-elevated overflow-hidden">
-              <div className="p-4 border-b flex items-center justify-between">
-                <h3 className="font-semibold">Users</h3>
-                <button className="gold-button text-sm flex items-center gap-1"><Plus className="w-3 h-3" /> Invite User</button>
+              <div className="p-3 sm:p-4 border-b flex items-center justify-between">
+                <h3 className="font-semibold text-sm sm:text-base">Users</h3>
+                <button className="gold-button text-xs sm:text-sm flex items-center gap-1"><Plus className="w-3 h-3" /> Invite User</button>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[500px]">
                 <thead>
                   <tr className="bg-muted/50 border-b">
                     <th className="p-3 text-left font-medium text-muted-foreground">Name</th>
@@ -200,6 +201,7 @@ export default function SettingsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <div className="card-elevated p-6">
@@ -234,11 +236,12 @@ export default function SettingsPage() {
 
         {activeTab === "warehouses" && (
           <div className="card-elevated overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="font-semibold">Warehouses</h3>
-              <button onClick={() => setShowAddWarehouse(true)} className="gold-button text-sm flex items-center gap-1"><Plus className="w-3 h-3" /> Add Warehouse</button>
+            <div className="p-3 sm:p-4 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-sm sm:text-base">Warehouses</h3>
+              <button onClick={() => setShowAddWarehouse(true)} className="gold-button text-xs sm:text-sm flex items-center gap-1"><Plus className="w-3 h-3" /> Add Warehouse</button>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[400px]">
               <thead>
                 <tr className="bg-muted/50 border-b">
                   <th className="p-3 text-left font-medium text-muted-foreground">Name</th>
@@ -258,19 +261,20 @@ export default function SettingsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
         {activeTab === "notifications" && (
-          <div className="card-elevated p-6 space-y-6">
-            <h3 className="font-semibold">Notification Preferences</h3>
+          <div className="card-elevated p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <h3 className="font-semibold text-sm sm:text-base">Notification Preferences</h3>
             {notifications.map((n: any) => (
-              <div key={n.label} className="flex items-center justify-between py-3 border-b last:border-0">
+              <div key={n.label} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 border-b last:border-0 gap-2">
                 <div>
                   <p className="text-sm font-medium">{n.label}</p>
-                  <p className="text-xs font-myanmar text-muted-foreground">{n.labelMm}</p>
+                  <p className="text-[10px] sm:text-xs font-myanmar text-muted-foreground">{n.labelMm}</p>
                 </div>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4 sm:gap-6">
                   <label className="flex items-center gap-2 text-sm">
                     <div className={`relative w-10 h-5 rounded-full cursor-pointer transition-colors ${n.email ? "bg-primary" : "bg-muted"}`}>
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-card shadow transition-transform ${n.email ? "translate-x-5" : "translate-x-0.5"}`} />
