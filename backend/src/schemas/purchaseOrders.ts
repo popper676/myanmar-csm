@@ -13,6 +13,19 @@ export const createPurchaseOrderSchema = z.object({
   })).min(1, 'At least one item is required'),
 });
 
+export const updatePurchaseOrderSchema = z.object({
+  supplierName: z.string().min(1).max(200).optional(),
+  orderDate: z.string().min(1).optional(),
+  expectedDelivery: z.string().optional(),
+  warehouse: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    name: z.string().min(1),
+    qty: z.number().int().min(1),
+    unitPrice: z.number().min(0),
+  })).min(1).optional(),
+});
+
 export const updatePurchaseOrderStatusSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'approved', 'received', 'delivered', 'cancelled']),
 });

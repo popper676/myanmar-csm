@@ -51,6 +51,7 @@ export const purchaseOrderApi = {
   },
   get: (id: string) => api(`/purchase-orders/${id}`),
   create: (data: any) => api('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: any) => api(`/purchase-orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateStatus: (id: string, status: string) =>
     api(`/purchase-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   delete: (id: string) => api(`/purchase-orders/${id}`, { method: 'DELETE' }),

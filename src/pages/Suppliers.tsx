@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Star, List, LayoutGrid, MapPin, Phone, Mail, X, Loader2 } from "lucide-react";
+import { Plus, Search, Star, List, LayoutGrid, MapPin, Phone, Mail, X, Loader2, Pencil, Trash2 } from "lucide-react";
 import { supplierApi } from "@/lib/api";
 import { AnimatePresence } from "framer-motion";
 
 const categories = ['Food', 'Textile', 'Cosmetics', 'Tobacco', 'Spices', 'Handicraft', 'Raw Material', 'General'];
+
+const emptySupplier = { nameEn: '', nameMm: '', phone: '', email: '', location: '', township: '', city: '', category: 'General', region: 'lower' as const };
 
 export default function Suppliers() {
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -12,9 +14,11 @@ export default function Suppliers() {
   const [catFilter, setCatFilter] = useState("");
   const [regionFilter, setRegionFilter] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const fetchSuppliers = async () => {
     setLoading(true);
@@ -36,17 +40,56 @@ export default function Suppliers() {
     fetchSuppliers();
   }, [search, catFilter, regionFilter]);
 
-  const [newSupplier, setNewSupplier] = useState({ nameEn: '', nameMm: '', phone: '', email: '', location: '', township: '', city: '', category: 'General', region: 'lower' as const });
+  const [formData, setFormData] = useState(emptySupplier);
 
-  const handleCreateSupplier = async () => {
-    if (!newSupplier.nameEn) return;
+  const openCreateModal = () => {
+    setEditingId(null);
+    setFormData(emptySupplier);
+    setShowModal(true);
+  };
+
+  const openEditModal = (supplier: any) => {
+    setEditingId(supplier.id);
+    setFormData({
+      nameEn: supplier.nameEn || '',
+      nameMm: supplier.nameMm || '',
+      phone: supplier.phone || '',
+      email: supplier.email || '',
+      location: supplier.location || '',
+      township: supplier.township || '',
+      city: supplier.city || '',
+      category: supplier.category || 'General',
+      region: supplier.region || 'lower',
+    });
+    setSelectedSupplier(null);
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!formData.nameEn) return;
     try {
-      await supplierApi.create(newSupplier);
-      setShowAdd(false);
-      setNewSupplier({ nameEn: '', nameMm: '', phone: '', email: '', location: '', township: '', city: '', category: 'General', region: 'lower' });
+      if (editingId) {
+        await supplierApi.update(editingId, formData);
+      } else {
+        await supplierApi.create(formData);
+      }
+      setShowModal(false);
+      setFormData(emptySupplier);
+      setEditingId(null);
       fetchSuppliers();
     } catch (err) {
-      console.error("Failed to create supplier:", err);
+      console.error("Failed to save supplier:", err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await supplierApi.delete(id);
+      setDeleteConfirm(null);
+      setSelectedSupplier(null);
+      fetchSuppliers();
+    } catch (err) {
+      console.error("Failed to delete supplier:", err);
     }
   };
 
@@ -67,7 +110,7 @@ export default function Suppliers() {
           <h1 className="text-xl sm:text-2xl font-bold">Supplier Management</h1>
           <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">ကုန်ပေးသူများ စီမံခန့်ခွဲမှု</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="gold-button flex items-center gap-2 self-start text-sm">
+        <button onClick={openCreateModal} className="gold-button flex items-center gap-2 self-start text-sm">
           <Plus className="w-4 h-4" /> Add Supplier
         </button>
       </div>
@@ -103,7 +146,15 @@ export default function Suppliers() {
       {view === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {suppliers.map((s: any, i: number) => (
-            <motion.div key={s.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="card-elevated p-5 cursor-pointer hover:border-accent/50" onClick={() => setSelectedSupplier(s.id)}>
+            <motion.div key={s.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="card-elevated p-5 cursor-pointer hover:border-accent/50 relative group" onClick={() => setSelectedSupplier(s.id)}>
+              <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={(e) => { e.stopPropagation(); openEditModal(s); }} className="p-1.5 rounded bg-card shadow hover:bg-muted" title="Edit">
+                  <Pencil className="w-3 h-3 text-muted-foreground" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(s.id); }} className="p-1.5 rounded bg-card shadow hover:bg-destructive/10" title="Delete">
+                  <Trash2 className="w-3 h-3 text-muted-foreground" />
+                </button>
+              </div>
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">{s.nameEn.charAt(0)}</div>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{s.category}</span>
@@ -124,7 +175,7 @@ export default function Suppliers() {
       ) : (
         <div className="card-elevated overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
+          <table className="w-full text-sm min-w-[700px]">
             <thead>
               <tr className="bg-muted/50 border-b">
                 <th className="p-3 text-left font-medium text-muted-foreground">Supplier</th>
@@ -133,6 +184,7 @@ export default function Suppliers() {
                 <th className="p-3 text-left font-medium text-muted-foreground">Rating</th>
                 <th className="p-3 text-right font-medium text-muted-foreground">Orders</th>
                 <th className="p-3 text-left font-medium text-muted-foreground">Contact</th>
+                <th className="p-3 text-center font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -144,6 +196,16 @@ export default function Suppliers() {
                   <td className="p-3"><StarRating rating={s.rating} /></td>
                   <td className="p-3 text-right font-mono-data">{s.totalOrders}</td>
                   <td className="p-3 text-xs text-muted-foreground">{s.phone}</td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); openEditModal(s); }} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(s.id); }} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Delete">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -165,7 +227,12 @@ export default function Suppliers() {
                     <h2 className="text-lg font-bold">{detail.nameEn}</h2>
                     <p className="text-sm font-myanmar text-muted-foreground">{detail.nameMm}</p>
                   </div>
-                  <button onClick={() => setSelectedSupplier(null)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => openEditModal(detail)} className="p-1.5 rounded hover:bg-muted" title="Edit">
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                    <button onClick={() => setSelectedSupplier(null)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                  </div>
                 </div>
 
                 <div className="space-y-4 mb-6">
@@ -194,60 +261,69 @@ export default function Suppliers() {
                     <p className="text-xs text-muted-foreground">Category</p>
                   </div>
                 </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button onClick={() => openEditModal(detail)} className="flex-1 px-4 py-2 rounded-md border text-sm font-medium hover:bg-muted flex items-center justify-center gap-2">
+                    <Pencil className="w-4 h-4" /> Edit Supplier
+                  </button>
+                  <button onClick={() => { setSelectedSupplier(null); setDeleteConfirm(detail.id); }} className="px-4 py-2 rounded-md bg-destructive/10 text-destructive text-sm font-medium hover:bg-destructive/20 flex items-center gap-2">
+                    <Trash2 className="w-4 h-4" /> Delete
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Add Supplier Modal */}
+      {/* Add/Edit Supplier Modal */}
       <AnimatePresence>
-        {showAdd && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setShowAdd(false)}>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-card rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        {showModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setShowModal(false)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-card rounded-lg shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold">Add Supplier</h2>
-                <button onClick={() => setShowAdd(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <h2 className="text-lg font-bold">{editingId ? "Edit Supplier" : "Add Supplier"}</h2>
+                <button onClick={() => setShowModal(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium">Name (English) *</label>
-                  <input value={newSupplier.nameEn} onChange={e => setNewSupplier(s => ({ ...s, nameEn: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  <input value={formData.nameEn} onChange={e => setFormData(s => ({ ...s, nameEn: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <div>
                   <label className="text-sm font-medium">Name (Myanmar)</label>
-                  <input value={newSupplier.nameMm} onChange={e => setNewSupplier(s => ({ ...s, nameMm: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  <input value={formData.nameMm} onChange={e => setFormData(s => ({ ...s, nameMm: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Phone</label>
-                    <input value={newSupplier.phone} onChange={e => setNewSupplier(s => ({ ...s, phone: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                    <input value={formData.phone} onChange={e => setFormData(s => ({ ...s, phone: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Email</label>
-                    <input value={newSupplier.email} onChange={e => setNewSupplier(s => ({ ...s, email: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                    <input value={formData.email} onChange={e => setFormData(s => ({ ...s, email: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Township</label>
-                    <input value={newSupplier.township} onChange={e => setNewSupplier(s => ({ ...s, township: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                    <input value={formData.township} onChange={e => setFormData(s => ({ ...s, township: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
                   </div>
                   <div>
                     <label className="text-sm font-medium">City</label>
-                    <input value={newSupplier.city} onChange={e => setNewSupplier(s => ({ ...s, city: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                    <input value={formData.city} onChange={e => setFormData(s => ({ ...s, city: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Category</label>
-                    <select value={newSupplier.category} onChange={e => setNewSupplier(s => ({ ...s, category: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <select value={formData.category} onChange={e => setFormData(s => ({ ...s, category: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Region</label>
-                    <select value={newSupplier.region} onChange={e => setNewSupplier(s => ({ ...s, region: e.target.value as 'upper' | 'lower' }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <select value={formData.region} onChange={e => setFormData(s => ({ ...s, region: e.target.value as 'upper' | 'lower' }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                       <option value="upper">Upper Myanmar</option>
                       <option value="lower">Lower Myanmar</option>
                     </select>
@@ -255,8 +331,25 @@ export default function Suppliers() {
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
-                <button onClick={handleCreateSupplier} className="gold-button">Save Supplier</button>
+                <button onClick={() => setShowModal(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
+                <button onClick={handleSave} className="gold-button">{editingId ? "Update Supplier" : "Save Supplier"}</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-card rounded-lg shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-2">Delete Supplier</h3>
+              <p className="text-sm text-muted-foreground mb-1">Are you sure you want to delete this supplier? This action cannot be undone.</p>
+              <p className="text-xs font-myanmar text-muted-foreground mb-6">ဤကုန်ပေးသူကို ဖျက်ရန် သေချာပါသလား?</p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
+                <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm hover:bg-destructive/90">Delete</button>
               </div>
             </motion.div>
           </motion.div>

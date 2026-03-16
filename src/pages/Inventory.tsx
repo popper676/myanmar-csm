@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, ChevronLeft, ChevronRight, Trash2, Download, X, Loader2 } from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight, Trash2, Download, X, Loader2, Pencil } from "lucide-react";
 import { inventoryApi } from "@/lib/api";
 import { type StockStatus } from "@/data/dummy-data";
 
@@ -12,6 +12,8 @@ const stockLabel: Record<StockStatus, { text: string; class: string }> = {
   low: { text: "Low", class: "stock-low" },
   critical: { text: "Critical", class: "stock-critical" },
 };
+
+const emptyItem = { nameEn: '', sku: '', category: 'Food', unit: 'kg', quantity: 0, minStock: 0, warehouseName: 'Yangon Main', unitPrice: 0, supplierName: '' };
 
 export default function Inventory() {
   const routeLocation = useLocation();
@@ -25,15 +27,17 @@ export default function Inventory() {
   const [warehouseFilter, setWarehouseFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const [newItem, setNewItem] = useState({ nameEn: '', sku: '', category: 'Food', unit: 'kg', quantity: 0, minStock: 0, warehouseName: 'Yangon Main', unitPrice: 0, supplierName: '' });
+  const [formData, setFormData] = useState(emptyItem);
 
   useEffect(() => {
     if (routeLocation.state?.openCreate === 'create-item') {
-      setShowAddModal(true);
+      openCreateModal();
       window.history.replaceState({}, '');
     }
   }, [routeLocation.state]);
@@ -62,11 +66,35 @@ export default function Inventory() {
   const toggleSelect = (id: string) => setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
   const toggleAll = () => setSelected(selected.length === items.length ? [] : items.map((i) => i.id));
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setFormData(emptyItem);
+    setShowModal(true);
+  };
+
+  const openEditModal = (item: any) => {
+    setEditingId(item.id);
+    setFormData({
+      nameEn: item.nameEn || '', sku: item.sku || '', category: item.category || 'Food',
+      unit: item.unit || 'kg', quantity: item.quantity || 0, minStock: item.minStock || 0,
+      warehouseName: item.warehouse || 'Yangon Main', unitPrice: item.unitPrice || 0, supplierName: item.supplierName || '',
+    });
+    setShowModal(true);
+  };
+
   const handleBulkDelete = async () => {
     if (!selected.length) return;
     try {
       await inventoryApi.bulkDelete(selected);
       setSelected([]);
+      fetchItems();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await inventoryApi.delete(id);
+      setDeleteConfirm(null);
       fetchItems();
     } catch (err) { console.error(err); }
   };
@@ -82,13 +110,18 @@ export default function Inventory() {
     } catch (err) { console.error(err); }
   };
 
-  const handleAddItem = async () => {
-    if (!newItem.nameEn || !newItem.sku) return;
+  const handleSave = async () => {
+    if (!formData.nameEn || !formData.sku) return;
     setSaving(true);
     try {
-      await inventoryApi.create(newItem);
-      setShowAddModal(false);
-      setNewItem({ nameEn: '', sku: '', category: 'Food', unit: 'kg', quantity: 0, minStock: 0, warehouseName: 'Yangon Main', unitPrice: 0, supplierName: '' });
+      if (editingId) {
+        await inventoryApi.update(editingId, formData);
+      } else {
+        await inventoryApi.create(formData);
+      }
+      setShowModal(false);
+      setFormData(emptyItem);
+      setEditingId(null);
       fetchItems();
     } catch (err) { console.error(err); }
     finally { setSaving(false); }
@@ -101,7 +134,7 @@ export default function Inventory() {
           <h1 className="text-xl sm:text-2xl font-bold">Inventory Management</h1>
           <p className="text-xs sm:text-sm text-muted-foreground font-myanmar">သိုလှောင်ရုံ စီမံခန့်ခွဲမှု</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="gold-button flex items-center gap-2 self-start text-sm">
+        <button onClick={openCreateModal} className="gold-button flex items-center gap-2 self-start text-sm">
           <Plus className="w-4 h-4" /> Add New Item
         </button>
       </div>
@@ -144,14 +177,13 @@ export default function Inventory() {
                   <th className="p-3 text-right font-medium text-muted-foreground">Qty</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Unit</th>
                   <th className="p-3 text-right font-medium text-muted-foreground">Min Stock</th>
-                  <th className="p-3 text-left font-medium text-muted-foreground">Warehouse</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
-                  <th className="p-3 text-left font-medium text-muted-foreground">Updated</th>
+                  <th className="p-3 text-center font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-muted-foreground">
+                  <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">
                     <p className="font-myanmar">ပစ္စည်း မရှိသေးပါ</p>
                     <p className="text-xs mt-1">No items found</p>
                   </td></tr>
@@ -167,13 +199,21 @@ export default function Inventory() {
                     <td className="p-3 text-right font-mono-data">{item.quantity?.toLocaleString()}</td>
                     <td className="p-3 text-muted-foreground">{item.unit}</td>
                     <td className="p-3 text-right font-mono-data text-muted-foreground">{item.minStock}</td>
-                    <td className="p-3 text-muted-foreground text-xs">{item.warehouse}</td>
                     <td className="p-3">
                       <span className={`text-xs font-semibold ${stockLabel[item.stockStatus as StockStatus]?.class || ''}`}>
                         ● {stockLabel[item.stockStatus as StockStatus]?.text || item.stockStatus}
                       </span>
                     </td>
-                    <td className="p-3 text-xs text-muted-foreground">{item.lastUpdated?.split('T')[0]}</td>
+                    <td className="p-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openEditModal(item)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setDeleteConfirm(item.id)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -202,36 +242,37 @@ export default function Inventory() {
         </div>
       </div>
 
+      {/* Add/Edit Modal */}
       <AnimatePresence>
-        {showAddModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setShowAddModal(false)}>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-card rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        {showModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setShowModal(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-card rounded-lg shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-lg font-bold">Add New Item</h2>
-                  <p className="text-xs font-myanmar text-muted-foreground">ပစ္စည်းအသစ်ထည့်ရန်</p>
+                  <h2 className="text-lg font-bold">{editingId ? "Edit Item" : "Add New Item"}</h2>
+                  <p className="text-xs font-myanmar text-muted-foreground">{editingId ? "ပစ္စည်းပြင်ဆင်ရန်" : "ပစ္စည်းအသစ်ထည့်ရန်"}</p>
                 </div>
-                <button onClick={() => setShowAddModal(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => setShowModal(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Product Name</label>
-                  <input value={newItem.nameEn} onChange={e => setNewItem(p => ({ ...p, nameEn: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Enter product name" />
+                  <label className="text-sm font-medium">Product Name *</label>
+                  <input value={formData.nameEn} onChange={e => setFormData(p => ({ ...p, nameEn: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Enter product name" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">SKU</label>
-                  <input value={newItem.sku} onChange={e => setNewItem(p => ({ ...p, sku: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g., RICE-001" />
+                  <label className="text-sm font-medium">SKU *</label>
+                  <input value={formData.sku} onChange={e => setFormData(p => ({ ...p, sku: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="e.g., RICE-001" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Category</label>
-                    <select value={newItem.category} onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <select value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                       {categories.map((c) => <option key={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Unit</label>
-                    <select value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <select value={formData.unit} onChange={e => setFormData(p => ({ ...p, unit: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                       {units.map((u) => <option key={u}>{u}</option>)}
                     </select>
                   </div>
@@ -239,32 +280,49 @@ export default function Inventory() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Quantity</label>
-                    <input type="number" value={newItem.quantity || ''} onChange={e => setNewItem(p => ({ ...p, quantity: parseInt(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
+                    <input type="number" value={formData.quantity || ''} onChange={e => setFormData(p => ({ ...p, quantity: parseInt(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Reorder Point</label>
-                    <input type="number" value={newItem.minStock || ''} onChange={e => setNewItem(p => ({ ...p, minStock: parseInt(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
+                    <input type="number" value={formData.minStock || ''} onChange={e => setFormData(p => ({ ...p, minStock: parseInt(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium">Warehouse</label>
-                    <select value={newItem.warehouseName} onChange={e => setNewItem(p => ({ ...p, warehouseName: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <select value={formData.warehouseName} onChange={e => setFormData(p => ({ ...p, warehouseName: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
                       {warehouses.map((w) => <option key={w}>{w}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-sm font-medium">Unit Price</label>
-                    <input type="number" value={newItem.unitPrice || ''} onChange={e => setNewItem(p => ({ ...p, unitPrice: parseFloat(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
+                    <input type="number" value={formData.unitPrice || ''} onChange={e => setFormData(p => ({ ...p, unitPrice: parseFloat(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="0" />
                   </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
-                <button onClick={handleAddItem} disabled={saving} className="gold-button flex items-center gap-2 disabled:opacity-70">
+                <button onClick={() => setShowModal(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
+                <button onClick={handleSave} disabled={saving} className="gold-button flex items-center gap-2 disabled:opacity-70">
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Save Item
+                  {editingId ? "Update Item" : "Save Item"}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50" onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-card rounded-lg shadow-xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-2">Delete Item</h3>
+              <p className="text-sm text-muted-foreground mb-1">Are you sure you want to delete this item?</p>
+              <p className="text-xs font-myanmar text-muted-foreground mb-6">ဤပစ္စည်းကို ဖျက်ရန် သေချာပါသလား?</p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>
+                <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 rounded-md bg-destructive text-destructive-foreground text-sm hover:bg-destructive/90">Delete</button>
               </div>
             </motion.div>
           </motion.div>

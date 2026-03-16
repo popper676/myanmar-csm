@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prepare, transaction } from '../db-wrapper';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { createPurchaseOrderSchema, updatePurchaseOrderStatusSchema, purchaseOrderQuerySchema } from '../schemas/purchaseOrders';
+import { createPurchaseOrderSchema, updatePurchaseOrderSchema, updatePurchaseOrderStatusSchema, purchaseOrderQuerySchema } from '../schemas/purchaseOrders';
 import { generateId, generatePoNumber } from '../utils/helpers';
 import { AppError } from '../middleware/errorHandler';
 
@@ -104,6 +104,58 @@ router.post('/', authenticate, authorize('admin', 'manager'), validate(createPur
   `).get(poId);
 
   res.status(201).json(order);
+});
+
+router.put('/:id', authenticate, authorize('admin', 'manager'), validate(updatePurchaseOrderSchema), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { supplierName, orderDate, expectedDelivery, warehouse, notes, items } = req.body;
+
+  const existing = prepare('SELECT id, status FROM purchase_orders WHERE id = ?').get(id) as any;
+  if (!existing) throw new AppError(404, 'Purchase order not found');
+  if (!['pending', 'approved'].includes(existing.status)) {
+    throw new AppError(400, 'Only pending or approved orders can be edited');
+  }
+
+  transaction(() => {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (supplierName !== undefined) { updates.push('supplier_name = ?'); params.push(supplierName); }
+    if (orderDate !== undefined) { updates.push('order_date = ?'); params.push(orderDate); }
+    if (expectedDelivery !== undefined) { updates.push('expected_delivery = ?'); params.push(expectedDelivery || null); }
+    if (warehouse !== undefined) { updates.push('warehouse = ?'); params.push(warehouse); }
+    if (notes !== undefined) { updates.push('notes = ?'); params.push(notes || null); }
+
+    if (items && items.length > 0) {
+      const totalAmount = items.reduce((sum: number, item: any) => sum + item.qty * item.unitPrice, 0);
+      updates.push('total_amount = ?', 'items_count = ?');
+      params.push(totalAmount, items.length);
+
+      prepare('DELETE FROM purchase_order_items WHERE po_id = ?').run(id);
+      for (const item of items) {
+        prepare('INSERT INTO purchase_order_items (id, po_id, name, qty, unit_price, total) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(generateId(), id, item.name, item.qty, item.unitPrice, item.qty * item.unitPrice);
+      }
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = datetime("now")');
+      params.push(id);
+      prepare(`UPDATE purchase_orders SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    }
+
+    prepare(`INSERT INTO audit_log (id, user_id, action, entity_type, entity_id) VALUES (?, ?, 'update', 'purchase_order', ?)`)
+      .run(generateId(), req.user!.userId, id);
+  });
+
+  const order = prepare(`
+    SELECT id, po_number as poNumber, supplier_name as supplier, order_date as orderDate,
+           expected_delivery as expectedDelivery, total_amount as totalAmount,
+           items_count as itemsCount, status, warehouse, notes
+    FROM purchase_orders WHERE id = ?
+  `).get(id);
+
+  res.json(order);
 });
 
 router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validate(updatePurchaseOrderStatusSchema), (req: Request, res: Response) => {
