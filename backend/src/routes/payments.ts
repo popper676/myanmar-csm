@@ -3,7 +3,7 @@ import { prepare } from '../db-wrapper';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createPaymentSchema, updatePaymentStatusSchema, paymentQuerySchema } from '../schemas/payments';
-import { generateId, generatePaymentId, paginationMeta } from '../utils/helpers';
+import { generateId, generatePaymentId, paginationMeta, csvSafeValue } from '../utils/helpers';
 import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
@@ -68,7 +68,8 @@ router.get('/export/csv', authenticate, (_req: Request, res: Response) => {
 
   const headers = 'Payment ID,Supplier,Date,Amount,Method,Reference,Status\n';
   const rows = payments.map(p =>
-    `"${p.payment_id}","${p.supplier_name}","${p.date}",${p.amount},"${p.method}","${p.reference || ''}","${p.status}"`
+    [p.payment_id, p.supplier_name, p.date, p.amount, p.method, p.reference || '', p.status]
+      .map(csvSafeValue).join(',')
   ).join('\n');
 
   res.setHeader('Content-Type', 'text/csv');

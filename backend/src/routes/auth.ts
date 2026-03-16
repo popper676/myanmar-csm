@@ -10,9 +10,29 @@ import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
 
+function trackFailedAttempt(key: string) {
+  const attempt = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  attempt.count += 1;
+  if (attempt.count >= MAX_LOGIN_ATTEMPTS) {
+    attempt.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+    attempt.count = 0;
+  }
+  loginAttempts.set(key, attempt);
+}
+
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 router.post('/login', validate(loginSchema), (req: Request, res: Response) => {
   const { username, password } = req.body;
+  const clientKey = `${req.ip}:${username}`;
 
+  const attempt = loginAttempts.get(clientKey);
+  if (attempt && attempt.lockedUntil > Date.now()) {
+    const minutesLeft = Math.ceil((attempt.lockedUntil - Date.now()) / 60000);
+    throw new AppError(429, `Account temporarily locked. Try again in ${minutesLeft} minutes.`);
+  }
 
   const user = prepare(`
     SELECT id, username, email, password_hash, full_name, role, department, status
@@ -20,6 +40,7 @@ router.post('/login', validate(loginSchema), (req: Request, res: Response) => {
   `).get(username, username) as any;
 
   if (!user) {
+    trackFailedAttempt(clientKey);
     throw new AppError(401, 'Invalid credentials');
   }
 
@@ -28,8 +49,11 @@ router.post('/login', validate(loginSchema), (req: Request, res: Response) => {
   }
 
   if (!bcrypt.compareSync(password, user.password_hash)) {
+    trackFailedAttempt(clientKey);
     throw new AppError(401, 'Invalid credentials');
   }
+
+  loginAttempts.delete(clientKey);
 
   const tokenPayload = { userId: user.id, username: user.username, role: user.role };
   const accessToken = generateAccessToken(tokenPayload);
@@ -127,8 +151,8 @@ router.post('/forgot-password', validate(forgotPasswordSchema), (req: Request, r
       INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)
     `).run(generateId(), user.id, hashToken(resetToken), expiresAt);
 
-    // In production, send email here. For now, log it.
-    console.log(`[PASSWORD RESET] Token for ${email}: ${resetToken}`);
+    // In production, send email with resetToken here.
+    // Never log tokens in production.
   }
 
   res.json({ message: 'If an account with that email exists, a reset link has been sent.' });

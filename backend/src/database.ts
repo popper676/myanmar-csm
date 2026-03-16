@@ -247,13 +247,14 @@ export function seedDatabase(): void {
 
   transaction(() => {
     // Users
-    const hash = bcrypt.hashSync('csm!@#1256', 12);
+    const adminHash = bcrypt.hashSync('csm!@#1256', 12);
+    const defaultHash = bcrypt.hashSync('Change@Me2024!', 12);
     const users = [
-      [uuidv4(), 'csmmaster', 'admin@myanmarscm.mm', hash, 'Aung Min', 'admin', 'Management', 'active', '2024-01-15 09:30'],
-      [uuidv4(), 'khinmar', 'khinmar@myanmarscm.mm', bcrypt.hashSync('manager123', 12), 'Khin Mar', 'manager', 'Inventory', 'active', '2024-01-15 08:15'],
-      [uuidv4(), 'zawhtet', 'zawhtet@myanmarscm.mm', bcrypt.hashSync('staff123', 12), 'Zaw Htet', 'staff', 'Warehouse', 'active', '2024-01-14 16:45'],
-      [uuidv4(), 'myatnoe', 'myatnoe@myanmarscm.mm', bcrypt.hashSync('viewer123', 12), 'Myat Noe', 'viewer', 'Finance', 'inactive', '2024-01-10 11:00'],
-      [uuidv4(), 'thidawin', 'thidawin@myanmarscm.mm', bcrypt.hashSync('staff123', 12), 'Thida Win', 'staff', 'Procurement', 'active', '2024-01-15 07:00'],
+      [uuidv4(), 'csmmaster', 'admin@myanmarscm.mm', adminHash, 'Aung Min', 'admin', 'Management', 'active', '2024-01-15 09:30'],
+      [uuidv4(), 'khinmar', 'khinmar@myanmarscm.mm', defaultHash, 'Khin Mar', 'manager', 'Inventory', 'active', '2024-01-15 08:15'],
+      [uuidv4(), 'zawhtet', 'zawhtet@myanmarscm.mm', defaultHash, 'Zaw Htet', 'staff', 'Warehouse', 'active', '2024-01-14 16:45'],
+      [uuidv4(), 'myatnoe', 'myatnoe@myanmarscm.mm', defaultHash, 'Myat Noe', 'viewer', 'Finance', 'inactive', '2024-01-10 11:00'],
+      [uuidv4(), 'thidawin', 'thidawin@myanmarscm.mm', defaultHash, 'Thida Win', 'staff', 'Procurement', 'active', '2024-01-15 07:00'],
     ];
     for (const u of users) {
       prepare('INSERT INTO users (id, username, email, password_hash, full_name, role, department, status, last_login) VALUES (?,?,?,?,?,?,?,?,?)').run(...u);

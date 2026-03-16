@@ -1,4 +1,4 @@
-import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
+import jwt, { type Secret, type SignOptions, type VerifyOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from '../config';
 
@@ -8,8 +8,11 @@ export interface TokenPayload {
   role: string;
 }
 
+const JWT_ALGORITHM = 'HS256' as const;
+
 export function generateAccessToken(payload: TokenPayload): string {
   const options: SignOptions = {
+    algorithm: JWT_ALGORITHM,
     expiresIn: config.jwt.expiresIn as any,
     issuer: 'myanscm-api',
     audience: 'myanscm-client',
@@ -19,6 +22,7 @@ export function generateAccessToken(payload: TokenPayload): string {
 
 export function generateRefreshToken(payload: TokenPayload): string {
   const options: SignOptions = {
+    algorithm: JWT_ALGORITHM,
     expiresIn: config.jwt.refreshExpiresIn as any,
     issuer: 'myanscm-api',
     audience: 'myanscm-client',
@@ -26,18 +30,18 @@ export function generateRefreshToken(payload: TokenPayload): string {
   return jwt.sign(payload, config.jwt.refreshSecret as Secret, options);
 }
 
+const verifyOpts: VerifyOptions = {
+  algorithms: [JWT_ALGORITHM],
+  issuer: 'myanscm-api',
+  audience: 'myanscm-client',
+};
+
 export function verifyAccessToken(token: string): TokenPayload {
-  return jwt.verify(token, config.jwt.secret, {
-    issuer: 'myanscm-api',
-    audience: 'myanscm-client',
-  }) as TokenPayload;
+  return jwt.verify(token, config.jwt.secret, verifyOpts) as TokenPayload;
 }
 
 export function verifyRefreshToken(token: string): TokenPayload {
-  return jwt.verify(token, config.jwt.refreshSecret, {
-    issuer: 'myanscm-api',
-    audience: 'myanscm-client',
-  }) as TokenPayload;
+  return jwt.verify(token, config.jwt.refreshSecret, verifyOpts) as TokenPayload;
 }
 
 export function hashToken(token: string): string {

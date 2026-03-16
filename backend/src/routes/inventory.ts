@@ -3,7 +3,7 @@ import { prepare, transaction } from '../db-wrapper';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createInventorySchema, updateInventorySchema, inventoryQuerySchema, bulkDeleteSchema } from '../schemas/inventory';
-import { generateId, computeStockStatus, paginationMeta } from '../utils/helpers';
+import { generateId, computeStockStatus, paginationMeta, csvSafeValue } from '../utils/helpers';
 import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
@@ -205,7 +205,8 @@ router.get('/export/csv', authenticate, (_req: Request, res: Response) => {
 
   const headers = 'SKU,Name (EN),Name (MM),Category,Quantity,Unit,Min Stock,Warehouse,Unit Price,Supplier,Status,Last Updated\n';
   const rows = items.map(i =>
-    `"${i.sku}","${i.name_en}","${i.name_mm}","${i.category}",${i.quantity},"${i.unit}",${i.min_stock},"${i.warehouse_name}",${i.unit_price},"${i.supplier_name}","${i.stock_status}","${i.last_updated}"`
+    [i.sku, i.name_en, i.name_mm, i.category, i.quantity, i.unit, i.min_stock, i.warehouse_name, i.unit_price, i.supplier_name, i.stock_status, i.last_updated]
+      .map(csvSafeValue).join(',')
   ).join('\n');
 
   res.setHeader('Content-Type', 'text/csv');

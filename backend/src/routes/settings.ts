@@ -18,7 +18,12 @@ const router = Router();
 const storage = multer.diskStorage({
   destination: config.upload.dir,
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const safeName = path.basename(file.originalname);
+    const ext = path.extname(safeName).toLowerCase();
+    const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.webp'];
+    if (!allowed.includes(ext)) {
+      return cb(new Error('Invalid file type'), '');
+    }
     cb(null, `logo-${Date.now()}${ext}`);
   },
 });
@@ -26,9 +31,8 @@ const upload = multer({
   storage,
   limits: { fileSize: config.upload.maxFileSize },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.webp'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
+    const allowed = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error('Invalid file type'));

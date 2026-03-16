@@ -34,7 +34,22 @@ export function computeStockStatus(quantity: number, minStock: number): 'suffici
 }
 
 export function sanitizeString(str: string): string {
-  return str.replace(/[<>]/g, '').trim();
+  return str
+    .replace(/[<>"'&;]/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
+
+export function csvSafeValue(val: any): string {
+  if (val == null) return '';
+  let str = String(val);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 export function paginationMeta(total: number, page: number, limit: number) {

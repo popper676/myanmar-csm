@@ -20,9 +20,13 @@ export const createWarehouseSchema = z.object({
 export const updateWarehouseSchema = createWarehouseSchema.partial();
 
 export const createUserSchema = z.object({
-  username: z.string().min(3).max(50),
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9._-]+$/, 'Username can only contain letters, numbers, dots, hyphens, and underscores'),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(8).max(128)
+    .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+    .regex(/[a-z]/, 'Password must contain a lowercase letter')
+    .regex(/[0-9]/, 'Password must contain a number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
   fullName: z.string().min(1).max(200),
   role: z.enum(['admin', 'manager', 'staff', 'viewer']),
   department: z.string().max(100).optional(),

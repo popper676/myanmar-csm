@@ -13,7 +13,9 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  if (config.nodeEnv !== 'production') {
+    console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  }
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -23,14 +25,9 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     return;
   }
 
-  const statusCode = 500;
-  const message = config.nodeEnv === 'production'
-    ? 'Internal server error'
-    : err.message;
-
-  res.status(statusCode).json({ error: message });
+  res.status(500).json({ error: 'Internal server error' });
 }
 
-export function notFoundHandler(req: Request, res: Response): void {
-  res.status(404).json({ error: `Route ${req.method} ${req.path} not found` });
+export function notFoundHandler(_req: Request, res: Response): void {
+  res.status(404).json({ error: 'Not found' });
 }

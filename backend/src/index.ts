@@ -7,6 +7,8 @@ import { config } from './config';
 import { initDb } from './db-wrapper';
 import { initializeDatabase, seedDatabase } from './database';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { authenticate } from './middleware/auth';
+import { cleanupExpiredTokens } from './utils/cleanup';
 
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
@@ -20,13 +22,35 @@ import settingsRoutes from './routes/settings';
 
 const app = express();
 
-// Security headers
+app.set('trust proxy', 1);
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", config.frontendUrl],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
 }));
 
-// CORS - only allow frontend origin
+app.use((_req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  next();
+});
+
 app.use(cors({
   origin: config.frontendUrl,
   credentials: true,
@@ -35,7 +59,6 @@ app.use(cors({
   maxAge: 86400,
 }));
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.maxRequests,
@@ -43,46 +66,30 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
   skip: (req) => req.path === '/api/health',
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
 });
 app.use('/api/', limiter);
 
-// Stricter rate limit for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts. Please wait 15 minutes.' },
+  keyGenerator: (req) => req.ip || req.socket.remoteAddress || 'unknown',
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
-// Body parsing with size limits
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.resolve(config.upload.dir)));
+app.use('/uploads', authenticate, express.static(path.resolve(config.upload.dir)));
 
-// Request logging in development
-if (config.nodeEnv === 'development') {
-  app.use((req, _res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-  });
-}
-
-// Health check
 app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    version: '1.0.0',
-  });
+  res.json({ status: 'ok' });
 });
 
-// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/inventory', inventoryRoutes);
@@ -93,17 +100,18 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Initialize and start
 async function start() {
   try {
     console.log('Initializing database...');
     await initDb();
     initializeDatabase();
     seedDatabase();
+
+    cleanupExpiredTokens();
+    setInterval(cleanupExpiredTokens, 60 * 60 * 1000);
 
     app.listen(config.port, '0.0.0.0', () => {
       console.log(`
@@ -113,10 +121,6 @@ async function start() {
   Environment: ${config.nodeEnv}
   Frontend:    ${config.frontendUrl}
   Status:      Running
-
-  Default Login:
-    Username: csmmaster
-    Password: csm!@#1256
       `);
     });
   } catch (error) {
