@@ -18,8 +18,12 @@ function downloadCsv(filename: string, csvContent: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 function escapeCsv(val: any): string {
@@ -178,6 +182,18 @@ export default function Reports() {
     { key: "stock-movement", title: "Stock Movement Report", titleMm: "စတော့ရွေ့လျားမှု", icon: FileText },
   ];
 
+  const getButtonIcon = (key: string) => {
+    if (generating === key) return <Loader2 className="w-3 h-3 animate-spin" />;
+    if (generated === key) return <Check className="w-3 h-3" />;
+    return <Download className="w-3 h-3" />;
+  };
+
+  const getButtonLabel = (key: string) => {
+    if (generating === key) return 'Generating...';
+    if (generated === key) return 'Downloaded';
+    return 'Generate & Download';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -233,15 +249,8 @@ export default function Reports() {
               disabled={generating === r.key}
               className="text-[10px] sm:text-xs text-accent font-medium mt-2 sm:mt-3 hover:underline flex items-center gap-1 disabled:opacity-60"
             >
-              {generating === r.key ? (
-                <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
-              ) : generated === r.key ? (
-                <><Check className="w-3 h-3" /> Downloaded</>
-              ) : (
-                <>
-                  <Download className="w-3 h-3" /> Generate & Download
-                </>
-              )}
+              <span className="inline-flex">{getButtonIcon(r.key)}</span>
+              <span>{getButtonLabel(r.key)}</span>
             </button>
           </motion.div>
         ))}
