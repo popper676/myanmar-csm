@@ -34,10 +34,23 @@ export default function SettingsPage() {
           settingsApi.getPermissions(),
         ]);
         setCompany(companyData);
-        setUsers(usersData);
-        setWarehousesList(warehousesData);
-        setNotifications(notifData);
-        setPermissions(permsData);
+        setUsers(Array.isArray(usersData) ? usersData.map((u: any) => ({
+          ...u,
+          name: u.fullName || u.name || u.full_name,
+          dept: u.department || u.dept,
+        })) : []);
+        setWarehousesList(Array.isArray(warehousesData) ? warehousesData : []);
+        if (notifData && !Array.isArray(notifData)) {
+          setNotifications([
+            { key: 'lowStock', label: 'Low Stock Alert', labelMm: 'စတော့နည်းနေသည့်သတိပေးချက်', email: !!notifData.lowStockEmail, sms: !!notifData.lowStockSms },
+            { key: 'newPo', label: 'New Purchase Order', labelMm: 'မှာယူလွှာအသစ်', email: !!notifData.newPoEmail, sms: !!notifData.newPoSms },
+            { key: 'shipmentDelayed', label: 'Shipment Delayed', labelMm: 'ပေးပို့မှုနောက်ကျခြင်း', email: !!notifData.shipmentDelayedEmail, sms: !!notifData.shipmentDelayedSms },
+            { key: 'paymentDue', label: 'Payment Due', labelMm: 'ငွေပေးချေရမည့်ရက်', email: !!notifData.paymentDueEmail, sms: !!notifData.paymentDueSms },
+          ]);
+        } else {
+          setNotifications(Array.isArray(notifData) ? notifData : []);
+        }
+        setPermissions(Array.isArray(permsData) ? permsData : []);
       } catch (err) {
         console.error("Failed to fetch settings:", err);
       } finally {

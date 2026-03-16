@@ -82,10 +82,30 @@ export default function PurchaseOrders() {
     }
   };
 
+  const [newOrder, setNewOrder] = useState({
+    supplierName: '', orderDate: new Date().toISOString().split('T')[0],
+    expectedDelivery: '', warehouse: 'Yangon Main', notes: '',
+    items: [{ name: '', qty: 1, unitPrice: 0 }] as { name: string; qty: number; unitPrice: number }[],
+  });
+
   const handleCreateOrder = async () => {
+    const validItems = newOrder.items.filter(i => i.name && i.qty > 0);
+    if (!newOrder.supplierName || validItems.length === 0) {
+      console.error("Please select a supplier and add at least one item");
+      return;
+    }
     try {
-      await purchaseOrderApi.create({});
+      await purchaseOrderApi.create({
+        supplierName: newOrder.supplierName,
+        orderDate: newOrder.orderDate,
+        expectedDelivery: newOrder.expectedDelivery || undefined,
+        warehouse: newOrder.warehouse,
+        notes: newOrder.notes || undefined,
+        items: validItems,
+      });
       setShowCreate(false);
+      setNewOrder({ supplierName: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', warehouse: 'Yangon Main', notes: '', items: [{ name: '', qty: 1, unitPrice: 0 }] });
+      setStep(1);
       fetchOrders(activeTab);
       fetchAllOrders();
     } catch (err) {
@@ -247,28 +267,26 @@ export default function PurchaseOrders() {
                   {step === 1 && (
                     <div>
                       <h3 className="font-semibold mb-4">Select Supplier</h3>
-                      <select className="w-full px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm">
-                        <option>Choose supplier...</option>
-                        {suppliersList.map((s: any) => <option key={s.id}>{s.nameEn} ({s.nameMm})</option>)}
+                      <select value={newOrder.supplierName} onChange={e => setNewOrder(o => ({ ...o, supplierName: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm">
+                        <option value="">Choose supplier...</option>
+                        {suppliersList.map((s: any) => <option key={s.id} value={s.nameEn}>{s.nameEn}{s.nameMm ? ` (${s.nameMm})` : ''}</option>)}
                       </select>
                     </div>
                   )}
                   {step === 2 && (
                     <div>
                       <h3 className="font-semibold mb-4">Add Items</h3>
-                      <div className="relative mb-4">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-50" />
-                        <input className="w-full pl-10 pr-4 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" placeholder="Search products..." />
-                      </div>
-                      <div className="space-y-2">
-                        {suppliersList.slice(0, 5).map((item: any) => (
-                          <div key={item.id} className="flex items-center justify-between p-3 rounded-md bg-sidebar-accent">
-                            <span className="text-sm">{item.nameEn}</span>
-                            <div className="flex items-center gap-2">
-                              <input type="number" className="w-16 px-2 py-1 rounded bg-primary text-primary-foreground text-sm text-center" placeholder="Qty" />
+                      <div className="space-y-3">
+                        {newOrder.items.map((item, idx) => (
+                          <div key={idx} className="p-3 rounded-md bg-sidebar-accent space-y-2">
+                            <input value={item.name} onChange={e => { const items = [...newOrder.items]; items[idx].name = e.target.value; setNewOrder(o => ({ ...o, items })); }} placeholder="Item name" className="w-full px-2 py-1 rounded bg-primary text-primary-foreground text-sm" />
+                            <div className="flex gap-2">
+                              <input type="number" value={item.qty || ''} onChange={e => { const items = [...newOrder.items]; items[idx].qty = parseInt(e.target.value) || 0; setNewOrder(o => ({ ...o, items })); }} placeholder="Qty" className="w-20 px-2 py-1 rounded bg-primary text-primary-foreground text-sm text-center" />
+                              <input type="number" value={item.unitPrice || ''} onChange={e => { const items = [...newOrder.items]; items[idx].unitPrice = parseFloat(e.target.value) || 0; setNewOrder(o => ({ ...o, items })); }} placeholder="Unit Price" className="flex-1 px-2 py-1 rounded bg-primary text-primary-foreground text-sm" />
                             </div>
                           </div>
                         ))}
+                        <button type="button" onClick={() => setNewOrder(o => ({ ...o, items: [...o.items, { name: '', qty: 1, unitPrice: 0 }] }))} className="text-xs text-accent hover:underline">+ Add another item</button>
                       </div>
                     </div>
                   )}
@@ -277,17 +295,17 @@ export default function PurchaseOrders() {
                       <h3 className="font-semibold mb-4">Delivery Details</h3>
                       <div>
                         <label className="text-sm opacity-70">Warehouse</label>
-                        <select className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm">
-                          <option>Yangon Main</option><option>Mandalay Hub</option><option>Bago Depot</option>
+                        <select value={newOrder.warehouse} onChange={e => setNewOrder(o => ({ ...o, warehouse: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm">
+                          <option>Yangon Main</option><option>Mandalay Hub</option><option>Bago Depot</option><option>Mawlamyine Store</option>
                         </select>
                       </div>
                       <div>
-                        <label className="text-sm opacity-70">Expected Date</label>
-                        <input type="date" className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" />
+                        <label className="text-sm opacity-70">Expected Delivery Date</label>
+                        <input type="date" value={newOrder.expectedDelivery} onChange={e => setNewOrder(o => ({ ...o, expectedDelivery: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" />
                       </div>
                       <div>
                         <label className="text-sm opacity-70">Notes</label>
-                        <textarea className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" rows={3} />
+                        <textarea value={newOrder.notes} onChange={e => setNewOrder(o => ({ ...o, notes: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md bg-sidebar-accent text-sidebar-foreground border-0 text-sm" rows={3} />
                       </div>
                     </div>
                   )}
@@ -295,9 +313,10 @@ export default function PurchaseOrders() {
                     <div>
                       <h3 className="font-semibold mb-4">Review & Submit</h3>
                       <div className="space-y-3 text-sm">
-                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Supplier:</span> Myanmar Rice Corp</div>
-                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Items:</span> 3 products</div>
-                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Warehouse:</span> Yangon Main</div>
+                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Supplier:</span> {newOrder.supplierName || '—'}</div>
+                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Items:</span> {newOrder.items.filter(i => i.name).length} products</div>
+                        <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Warehouse:</span> {newOrder.warehouse}</div>
+                        {newOrder.expectedDelivery && <div className="p-3 rounded-md bg-sidebar-accent"><span className="opacity-70">Expected:</span> {newOrder.expectedDelivery}</div>}
                       </div>
                     </div>
                   )}
@@ -306,7 +325,7 @@ export default function PurchaseOrders() {
                 {/* Footer */}
                 <div className="mt-8 p-4 rounded-lg bg-sidebar-accent">
                   <p className="text-xs opacity-70 mb-1">Estimated Total</p>
-                  <p className="text-2xl font-bold text-accent font-mono-data">{formatMMK(12500000)}</p>
+                  <p className="text-2xl font-bold text-accent font-mono-data">{formatMMK(newOrder.items.reduce((sum, i) => sum + (i.qty * i.unitPrice), 0))}</p>
                 </div>
                 <div className="flex justify-between mt-6">
                   <button onClick={() => setStep(Math.max(1, step - 1))} disabled={step === 1} className="px-4 py-2 rounded-md bg-sidebar-accent text-sm disabled:opacity-40">Back</button>

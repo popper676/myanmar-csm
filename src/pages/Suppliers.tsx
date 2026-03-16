@@ -36,10 +36,14 @@ export default function Suppliers() {
     fetchSuppliers();
   }, [search, catFilter, regionFilter]);
 
+  const [newSupplier, setNewSupplier] = useState({ nameEn: '', nameMm: '', phone: '', email: '', location: '', township: '', city: '', category: 'General', region: 'lower' as const });
+
   const handleCreateSupplier = async () => {
+    if (!newSupplier.nameEn) return;
     try {
-      await supplierApi.create({});
+      await supplierApi.create(newSupplier);
       setShowAdd(false);
+      setNewSupplier({ nameEn: '', nameMm: '', phone: '', email: '', location: '', township: '', city: '', category: 'General', region: 'lower' });
       fetchSuppliers();
     } catch (err) {
       console.error("Failed to create supplier:", err);
@@ -204,15 +208,48 @@ export default function Suppliers() {
                 <button onClick={() => setShowAdd(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="space-y-4">
-                {["Name (English)", "Name (Myanmar)", "Phone", "Email", "Address", "Business Type", "Payment Terms"].map((f) => (
-                  <div key={f}>
-                    <label className="text-sm font-medium">{f}</label>
-                    <input className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                  </div>
-                ))}
                 <div>
-                  <label className="text-sm font-medium">Notes</label>
-                  <textarea className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" rows={3} />
+                  <label className="text-sm font-medium">Name (English) *</label>
+                  <input value={newSupplier.nameEn} onChange={e => setNewSupplier(s => ({ ...s, nameEn: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Name (Myanmar)</label>
+                  <input value={newSupplier.nameMm} onChange={e => setNewSupplier(s => ({ ...s, nameMm: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Phone</label>
+                    <input value={newSupplier.phone} onChange={e => setNewSupplier(s => ({ ...s, phone: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Email</label>
+                    <input value={newSupplier.email} onChange={e => setNewSupplier(s => ({ ...s, email: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Township</label>
+                    <input value={newSupplier.township} onChange={e => setNewSupplier(s => ({ ...s, township: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">City</label>
+                    <input value={newSupplier.city} onChange={e => setNewSupplier(s => ({ ...s, city: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Category</label>
+                    <select value={newSupplier.category} onChange={e => setNewSupplier(s => ({ ...s, category: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Region</label>
+                    <select value={newSupplier.region} onChange={e => setNewSupplier(s => ({ ...s, region: e.target.value as 'upper' | 'lower' }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                      <option value="upper">Upper Myanmar</option>
+                      <option value="lower">Lower Myanmar</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">

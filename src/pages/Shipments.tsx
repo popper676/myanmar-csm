@@ -37,10 +37,27 @@ export default function Shipments() {
     shipmentApi.cities().then(setCities).catch(console.error);
   }, []);
 
+  const [newShipment, setNewShipment] = useState({ from: '', to: '', carrier: '', dispatchDate: '', eta: '' });
+
   const handleCreateShipment = async () => {
+    const fromCity = cities.find((c: any) => newShipment.from.startsWith(c.en));
+    const toCity = cities.find((c: any) => newShipment.to.startsWith(c.en));
+    if (!fromCity || !toCity || !newShipment.carrier || !newShipment.dispatchDate || !newShipment.eta) {
+      console.error("Please fill all fields");
+      return;
+    }
     try {
-      await shipmentApi.create({});
+      await shipmentApi.create({
+        fromEn: fromCity.en,
+        fromMm: fromCity.mm,
+        toEn: toCity.en,
+        toMm: toCity.mm,
+        carrier: newShipment.carrier,
+        dispatchDate: newShipment.dispatchDate,
+        eta: newShipment.eta,
+      });
       setShowAdd(false);
+      setNewShipment({ from: '', to: '', carrier: '', dispatchDate: '', eta: '' });
       fetchShipments();
     } catch (err) {
       console.error("Failed to create shipment:", err);
@@ -176,24 +193,32 @@ export default function Shipments() {
                 <button onClick={() => setShowAdd(false)} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div className="space-y-4">
-                {[
-                  { label: "From", type: "select", options: cities.map((c: any) => `${c.en} (${c.mm})`) },
-                  { label: "To", type: "select", options: cities.map((c: any) => `${c.en} (${c.mm})`) },
-                  { label: "Carrier", type: "text" },
-                  { label: "Dispatch Date", type: "date" },
-                  { label: "Expected Arrival", type: "date" },
-                ].map((field) => (
-                  <div key={field.label}>
-                    <label className="text-sm font-medium">{field.label}</label>
-                    {field.type === "select" ? (
-                      <select className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
-                        {field.options?.map((o) => <option key={o}>{o}</option>)}
-                      </select>
-                    ) : (
-                      <input type={field.type} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
-                    )}
-                  </div>
-                ))}
+                <div>
+                  <label className="text-sm font-medium">From</label>
+                  <select value={newShipment.from} onChange={e => setNewShipment(s => ({ ...s, from: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <option value="">Select origin...</option>
+                    {cities.map((c: any) => <option key={c.en} value={`${c.en} (${c.mm})`}>{c.en} ({c.mm})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">To</label>
+                  <select value={newShipment.to} onChange={e => setNewShipment(s => ({ ...s, to: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm">
+                    <option value="">Select destination...</option>
+                    {cities.map((c: any) => <option key={c.en} value={`${c.en} (${c.mm})`}>{c.en} ({c.mm})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Carrier</label>
+                  <input type="text" value={newShipment.carrier} onChange={e => setNewShipment(s => ({ ...s, carrier: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" placeholder="e.g., Myanmar Express Logistics" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Dispatch Date</label>
+                  <input type="date" value={newShipment.dispatchDate} onChange={e => setNewShipment(s => ({ ...s, dispatchDate: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Expected Arrival</label>
+                  <input type="date" value={newShipment.eta} onChange={e => setNewShipment(s => ({ ...s, eta: e.target.value }))} className="w-full mt-1 px-3 py-2 rounded-md border bg-background text-sm" />
+                </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-md border text-sm hover:bg-muted">Cancel</button>

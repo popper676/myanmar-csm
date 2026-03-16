@@ -6,6 +6,12 @@ import { reportApi } from "@/lib/api";
 
 const formatMMK = (amount: number): string => `${amount.toLocaleString()} ကျပ်`;
 
+const PIE_COLORS = [
+  'hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--success))',
+  'hsl(var(--info))', 'hsl(var(--warning-dark))', 'hsl(var(--destructive))',
+  '#8884d8', '#82ca9d', '#ffc658', '#ff8042',
+];
+
 const reportCards = [
   { title: "Inventory Valuation Report", titleMm: "သိုလှောင်ရုံတန်ဖိုးအစီရင်ခံစာ", icon: FileText },
   { title: "Purchase Order Summary", titleMm: "မှာယူမှုအနှစ်ချုပ်", icon: FileText },
@@ -33,10 +39,19 @@ export default function Reports() {
           reportApi.costBreakdown(),
           reportApi.movingProducts(),
         ]);
-        setSummaryStats(summary);
-        setTurnoverData(turnover);
-        setCostBreakdown(cost);
-        setMovingProducts(moving);
+        if (Array.isArray(summary)) {
+          setSummaryStats(summary);
+        } else {
+          setSummaryStats([
+            { label: "Total Purchases", labelMm: "စုစုပေါင်းဝယ်ယူမှု", value: formatMMK(summary.totalPurchases || 0) },
+            { label: "Active Suppliers", labelMm: "လက်ရှိကုန်ပေးသူ", value: String(summary.activeSuppliers || 0) },
+            { label: "Inventory Accuracy", labelMm: "သိုလှောင်ရုံတိကျမှု", value: `${summary.inventoryAccuracy || 0}%` },
+          ]);
+        }
+        setTurnoverData(Array.isArray(turnover) ? turnover : []);
+        const costArr = Array.isArray(cost) ? cost : [];
+        setCostBreakdown(costArr.map((c: any, i: number) => ({ ...c, color: c.color || PIE_COLORS[i % PIE_COLORS.length] })));
+        setMovingProducts(Array.isArray(moving) ? moving : []);
       } catch (err) {
         console.error("Failed to fetch reports:", err);
       } finally {
