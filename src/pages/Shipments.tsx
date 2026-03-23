@@ -106,7 +106,8 @@ export default function Shipments() {
       <div className="card-elevated p-4 sm:p-6">
         <h3 className="font-semibold mb-1">Myanmar route map</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Cities and shipment routes on a real map. Lines are colored by status.
+          Each route shows <strong className="text-foreground">progress</strong>: solid line = completed so far, dashed = still to go.
+          The marker is the current stage (click for details). “In transit” pulses on the map.
         </p>
         {cities.length > 0 && (
           <ShipmentMap
