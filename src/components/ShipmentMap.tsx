@@ -70,6 +70,7 @@ const statusProgress: Record<ShipmentStatus, number> = {
   delivered: 1,
 };
 
+/** Base colors (legend + markers) */
 const routeColors: Record<ShipmentStatus, string> = {
   ordered: "#64748b",
   dispatched: "#0ea5e9",
@@ -77,6 +78,21 @@ const routeColors: Record<ShipmentStatus, string> = {
   customs: "#ca8a04",
   delivered: "#16a34a",
 };
+
+/** HSL per status — line on map uses these so colors stay vivid; index shifts hue per shipment */
+const statusLineHsl: Record<ShipmentStatus, { h: number; s: number; l: number }> = {
+  ordered: { h: 215, s: 35, l: 42 },
+  dispatched: { h: 199, s: 85, l: 48 },
+  in_transit: { h: 28, s: 88, l: 48 },
+  customs: { h: 43, s: 90, l: 42 },
+  delivered: { h: 142, s: 72, l: 38 },
+};
+
+function lineColorForShipment(status: ShipmentStatus, shipmentIndex: number): string {
+  const b = statusLineHsl[status] ?? statusLineHsl.ordered;
+  const h = (b.h + shipmentIndex * 31) % 360;
+  return `hsl(${h} ${b.s}% ${b.l}%)`;
+}
 
 function straightLine(from: MapCity, to: MapCity): [number, number][] {
   return [
@@ -138,7 +154,10 @@ type RouteProcess = {
   status: ShipmentStatus;
   statusLabel: string;
   step: number;
+  /** Marker / popup accent (hex from status) */
   color: string;
+  /** Polyline color (HSL, unique per shipment when many on map) */
+  lineColor: string;
   completed: [number, number][];
   remaining: [number, number][];
   markerPos: [number, number];
@@ -216,6 +235,7 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
 
   const routes: RouteProcess[] = useMemo(() => {
     const out: RouteProcess[] = [];
+    let shipmentIndex = 0;
     for (const s of normalized) {
       const from = cityMap.get(s.from.en);
       const to = cityMap.get(s.to.en);
@@ -224,6 +244,8 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
       const path = pathsById[s.id] ?? straightLine(from, to);
       const t = statusProgress[s.status] ?? 0;
       const color = routeColors[s.status] ?? "#64748b";
+      const lineColor = lineColorForShipment(s.status, shipmentIndex);
+      shipmentIndex += 1;
       const step = statusSteps.indexOf(s.status);
       const pulse = s.status === "in_transit";
 
@@ -248,6 +270,7 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
         statusLabel: statusLabels[s.status],
         step: step >= 0 ? step + 1 : 1,
         color,
+        lineColor,
         completed,
         remaining,
         markerPos,
@@ -275,9 +298,9 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-border bg-muted/30" style={{ minHeight: 420 }}>
       <div className="pointer-events-none absolute right-2 top-2 z-[400] max-w-[200px] rounded-md border border-border bg-card/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur-sm sm:max-w-none">
-        <p className="font-semibold text-foreground">Shipment progress</p>
+        <p className="font-semibold text-foreground">Shipment routes</p>
         <p className="mt-1 text-muted-foreground">
-          Routes follow roads from your shipment origin → destination. Solid = completed; dashed = remaining.
+          Each colored line is one shipment (hue by status; shifts if several share a status). Faint underlay = full path; bold = completed; dashed = remaining.
         </p>
         <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
           <li>
@@ -305,31 +328,50 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
         />
         {fitPoints.length > 0 && <FitBounds points={fitPoints} maxZoom={routes.length <= 2 ? 11 : 9} />}
 
+        {/* Full route underlay (shipment-colored, subtle) */}
+        {routes.map((r) => (
+          <Polyline
+            key={`${r.key}-full`}
+            positions={r.path}
+            pathOptions={{
+              color: r.lineColor,
+              weight: 12,
+              opacity: 0.22,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+        ))}
+
+        {/* Remaining leg — dashed, same shipment color (not gray) */}
         {routes.map((r) =>
           r.status === "delivered" ? null : (
             <Polyline
               key={`${r.key}-remain`}
               positions={r.remaining}
               pathOptions={{
-                color: "#94a3b8",
-                weight: 3,
-                opacity: 0.45,
-                dashArray: "10 8",
+                color: r.lineColor,
+                weight: 5,
+                opacity: 0.42,
+                dashArray: "12 10",
                 lineCap: "round",
+                lineJoin: "round",
               }}
             />
           ),
         )}
 
+        {/* Completed leg — bold, full opacity */}
         {routes.map((r) => (
           <Polyline
             key={`${r.key}-done`}
             positions={r.completed}
             pathOptions={{
-              color: r.color,
-              weight: 5,
-              opacity: 0.92,
+              color: r.lineColor,
+              weight: 7,
+              opacity: 1,
               lineCap: "round",
+              lineJoin: "round",
             }}
           />
         ))}
