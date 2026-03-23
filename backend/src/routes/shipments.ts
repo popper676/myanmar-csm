@@ -49,13 +49,14 @@ router.get('/', authenticate, validate(shipmentQuerySchema, 'query'), (req: Requ
 });
 
 router.get('/cities', authenticate, (_req: Request, res: Response) => {
+  // lat/lng approximations for OpenStreetMap — legacy x/y kept for any old clients
   res.json([
-    { en: 'Yangon', mm: 'ရန်ကုန်', x: 50, y: 80 },
-    { en: 'Bago', mm: 'ပဲခူး', x: 55, y: 70 },
-    { en: 'Naypyidaw', mm: 'နေပြည်တော်', x: 50, y: 50 },
-    { en: 'Mandalay', mm: 'မန္တလေး', x: 52, y: 30 },
-    { en: 'Mawlamyine', mm: 'မော်လမြိုင်', x: 65, y: 75 },
-    { en: 'Taunggyi', mm: 'တောင်ကြီး', x: 70, y: 45 },
+    { en: 'Yangon', mm: 'ရန်ကုန်', x: 50, y: 80, lat: 16.866, lng: 96.195 },
+    { en: 'Bago', mm: 'ပဲခူး', x: 55, y: 70, lat: 17.335, lng: 96.481 },
+    { en: 'Naypyidaw', mm: 'နေပြည်တော်', x: 50, y: 50, lat: 19.763, lng: 96.079 },
+    { en: 'Mandalay', mm: 'မန္တလေး', x: 52, y: 30, lat: 21.959, lng: 96.089 },
+    { en: 'Mawlamyine', mm: 'မော်လမြိုင်', x: 65, y: 75, lat: 16.491, lng: 97.628 },
+    { en: 'Taunggyi', mm: 'တောင်ကြီး', x: 70, y: 45, lat: 20.789, lng: 97.038 },
   ]);
 });
 

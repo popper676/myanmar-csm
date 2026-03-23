@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, Filter, Truck, Loader2 } from "lucide-react";
 import { shipmentApi } from "@/lib/api";
 import type { ShipmentStatus } from "@/data/dummy-data";
+import ShipmentMap from "@/components/ShipmentMap";
 
 const statusSteps: ShipmentStatus[] = ["ordered", "dispatched", "in_transit", "customs", "delivered"];
 const statusLabels: Record<ShipmentStatus, string> = { ordered: "Ordered", dispatched: "Dispatched", in_transit: "In Transit", customs: "Customs", delivered: "Delivered" };
@@ -101,37 +102,18 @@ export default function Shipments() {
         ))}
       </div>
 
-      {/* Route Map SVG */}
-      <div className="card-elevated p-6">
-        <h3 className="font-semibold mb-4">Myanmar Route Network</h3>
-        <div className="relative w-full" style={{ paddingBottom: "50%" }}>
-          <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
-            {/* Route lines */}
-            {[
-              [50, 80, 55, 70], [55, 70, 50, 50], [50, 50, 52, 30],
-              [65, 75, 55, 70], [70, 45, 52, 30],
-            ].map(([x1, y1, x2, y2], i) => (
-              <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="hsl(var(--border))" strokeWidth="0.5" strokeDasharray="2 1" />
-            ))}
-            {/* City nodes */}
-            {cities.map((city: any) => (
-              <g key={city.en}>
-                <circle cx={city.x} cy={city.y} r="2.5" fill="hsl(var(--primary))" className="drop-shadow-sm" />
-                <text x={city.x} y={city.y - 4} textAnchor="middle" className="fill-foreground" style={{ fontSize: "3px", fontWeight: 600 }}>{city.en}</text>
-                <text x={city.x} y={city.y + 6} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: "2.5px", fontFamily: "'Noto Sans Myanmar'" }}>{city.mm}</text>
-              </g>
-            ))}
-            {/* Active shipment indicators */}
-            {shipments.filter((s: any) => s.status === "in_transit").map((s: any) => {
-              const from = cities.find((c: any) => c.en === s.from.en);
-              const to = cities.find((c: any) => c.en === s.to.en);
-              if (!from || !to) return null;
-              const mx = (from.x + to.x) / 2;
-              const my = (from.y + to.y) / 2;
-              return <circle key={s.id} cx={mx} cy={my} r="1.5" fill="hsl(var(--accent))" className="animate-pulse-dot" />;
-            })}
-          </svg>
-        </div>
+      {/* Live map: OpenStreetMap tiles (free, no API key) */}
+      <div className="card-elevated p-4 sm:p-6">
+        <h3 className="font-semibold mb-1">Myanmar route map</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Cities and shipment routes on a real map. Lines are colored by status.
+        </p>
+        {cities.length > 0 && (
+          <ShipmentMap
+            cities={cities.filter((c: any) => typeof c.lat === "number" && typeof c.lng === "number")}
+            shipments={shipments}
+          />
+        )}
       </div>
 
       {/* Shipment Cards */}
