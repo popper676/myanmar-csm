@@ -24,7 +24,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     try {
+      const token = localStorage.getItem('accessToken');
       const saved = localStorage.getItem('user');
+      // Stale session: user blob without tokens → treat as logged out
+      if (saved && !token) {
+        localStorage.removeItem('user');
+        return null;
+      }
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -52,6 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** API client clears tokens on 401 — sync React auth state */
+  useEffect(() => {
+    const onSessionCleared = () => setUser(null);
+    window.addEventListener('auth:session-cleared', onSessionCleared);
+    return () => window.removeEventListener('auth:session-cleared', onSessionCleared);
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     setError(null);

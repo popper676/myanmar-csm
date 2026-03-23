@@ -23,6 +23,9 @@ export function clearTokens() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:session-cleared'));
+  }
 }
 
 export function getAccessToken(): string | null {
@@ -60,6 +63,14 @@ export async function api<T = any>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  // Keep in-memory store in sync (e.g. login in another tab, or rare init races)
+  const storedAccess = localStorage.getItem('accessToken');
+  const storedRefresh = localStorage.getItem('refreshToken');
+  if (storedAccess) tokens.accessToken = storedAccess;
+  if (storedRefresh) tokens.refreshToken = storedRefresh;
+  if (!storedAccess) tokens.accessToken = null;
+  if (!storedRefresh) tokens.refreshToken = null;
+
   const url = `${API_BASE}${endpoint}`;
 
   const headers: Record<string, string> = {
