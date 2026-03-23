@@ -172,6 +172,15 @@
   50% { transform: scale(1.5); opacity: 0.6; }
 }
 
+/* Leaflet: keep vector strokes visible (Tailwind * { border-color } / resets can affect SVG) */
+.leaflet-container .leaflet-overlay-pane svg path.leaflet-interactive {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.leaflet-container .leaflet-overlay-pane svg path {
+  fill-rule: evenodd;
+}
+
 /* Leaflet: custom shipment progress markers (DivIcon) */
 .leaflet-div-icon.shipment-map-div-icon {
   border: none !important;

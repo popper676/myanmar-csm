@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Pane, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { ShipmentStatus } from "@/data/dummy-data";
@@ -40,8 +40,8 @@ export function normalizeShipmentForMap(raw: Record<string, unknown>): ShipmentL
   const fromEn = fromObj?.en ?? (raw.fromEn as string | undefined);
   const toEn = toObj?.en ?? (raw.toEn as string | undefined);
   const status = raw.status as ShipmentStatus | undefined;
-  const id = String(raw.id ?? "");
-  const shipmentId = String(raw.shipmentId ?? "");
+  const id = raw.id != null && raw.id !== "" ? String(raw.id) : "";
+  const shipmentId = raw.shipmentId != null ? String(raw.shipmentId) : "";
   if (!fromEn || !toEn || !status || !id) return null;
   return {
     id,
@@ -79,19 +79,30 @@ const routeColors: Record<ShipmentStatus, string> = {
   delivered: "#16a34a",
 };
 
-/** HSL per status — line on map uses these so colors stay vivid; index shifts hue per shipment */
-const statusLineHsl: Record<ShipmentStatus, { h: number; s: number; l: number }> = {
-  ordered: { h: 215, s: 35, l: 42 },
-  dispatched: { h: 199, s: 85, l: 48 },
-  in_transit: { h: 28, s: 88, l: 48 },
-  customs: { h: 43, s: 90, l: 42 },
-  delivered: { h: 142, s: 72, l: 38 },
-};
-
+/** Polylines use hex (reliable for SVG stroke). Space-separated hsl() can fail on some SVG engines. */
 function lineColorForShipment(status: ShipmentStatus, shipmentIndex: number): string {
-  const b = statusLineHsl[status] ?? statusLineHsl.ordered;
-  const h = (b.h + shipmentIndex * 31) % 360;
-  return `hsl(${h} ${b.s}% ${b.l}%)`;
+  void shipmentIndex;
+  return routeColors[status] ?? "#2563eb";
+}
+
+function buildCityLookup(cities: MapCity[]) {
+  const m = new Map<string, MapCity>();
+  for (const c of cities) {
+    const k = c.en.trim();
+    m.set(k, c);
+    m.set(k.toLowerCase(), c);
+  }
+  return (name: string): MapCity | undefined => {
+    const n = name.trim();
+    return m.get(n) ?? m.get(n.toLowerCase());
+  };
+}
+
+function cleanLatLngs(pts: [number, number][]): [number, number][] {
+  const out = pts.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
+  if (out.length >= 2) return out;
+  if (out.length === 1) return [out[0], out[0]];
+  return [];
 }
 
 function straightLine(from: MapCity, to: MapCity): [number, number][] {
@@ -148,6 +159,24 @@ function FitBounds({ points, maxZoom = 10 }: { points: [number, number][]; maxZo
   return null;
 }
 
+/** React-Leaflet sometimes needs a nudge after polylines mount or container layout settles */
+function MapInvalidate({ deps }: { deps: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    const run = () => {
+      map.invalidateSize({ animate: false });
+    };
+    run();
+    const t = requestAnimationFrame(run);
+    const t2 = window.setTimeout(run, 250);
+    return () => {
+      cancelAnimationFrame(t);
+      window.clearTimeout(t2);
+    };
+  }, [map, deps]);
+  return null;
+}
+
 type RouteProcess = {
   key: string;
   shipmentId: string;
@@ -166,11 +195,7 @@ type RouteProcess = {
 };
 
 export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; shipments: unknown[] }) {
-  const cityMap = useMemo(() => {
-    const m = new Map<string, MapCity>();
-    for (const c of cities) m.set(c.en, c);
-    return m;
-  }, [cities]);
+  const resolveCity = useMemo(() => buildCityLookup(cities), [cities]);
 
   const normalized = useMemo(() => {
     const out: ShipmentLike[] = [];
@@ -192,8 +217,8 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
       const uniquePairs = new Map<string, { from: MapCity; to: MapCity; ids: string[] }>();
 
       for (const s of normalized) {
-        const from = cityMap.get(s.from.en);
-        const to = cityMap.get(s.to.en);
+        const from = resolveCity(s.from.en);
+        const to = resolveCity(s.to.en);
         if (!from || !to) continue;
         const k = pairKey(from, to);
         if (!uniquePairs.has(k)) uniquePairs.set(k, { from, to, ids: [] });
@@ -231,17 +256,17 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
     return () => {
       cancelled = true;
     };
-  }, [normalized, cityMap, cities.length]);
+  }, [normalized, resolveCity, cities.length]);
 
   const routes: RouteProcess[] = useMemo(() => {
     const out: RouteProcess[] = [];
     let shipmentIndex = 0;
     for (const s of normalized) {
-      const from = cityMap.get(s.from.en);
-      const to = cityMap.get(s.to.en);
+      const from = resolveCity(s.from.en);
+      const to = resolveCity(s.to.en);
       if (!from || !to) continue;
 
-      const path = pathsById[s.id] ?? straightLine(from, to);
+      const path = cleanLatLngs(pathsById[s.id] ?? straightLine(from, to));
       const t = statusProgress[s.status] ?? 0;
       const color = routeColors[s.status] ?? "#64748b";
       const lineColor = lineColorForShipment(s.status, shipmentIndex);
@@ -254,8 +279,8 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
       let markerPos: [number, number];
 
       if (path.length >= 2) {
-        completed = slicePolylineToFraction(path, t);
-        remaining = slicePolylineFromFraction(path, t);
+        completed = cleanLatLngs(slicePolylineToFraction(path, t));
+        remaining = cleanLatLngs(slicePolylineFromFraction(path, t));
         markerPos = pointAtFractionAlongPolyline(path, t);
       } else {
         completed = [interpolate(from, to, 0), interpolate(from, to, t)];
@@ -279,7 +304,7 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
       });
     }
     return out;
-  }, [normalized, cityMap, pathsById]);
+  }, [normalized, resolveCity, pathsById]);
 
   /** Fit map to shipment routes (not every city) so Bago→Yangon is visible */
   const fitPoints = useMemo(() => {
@@ -295,12 +320,15 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
 
   const center: [number, number] = [19.5, 96.0];
 
+  /** Remount map when route geometry arrives so polylines reliably attach (react-leaflet edge cases) */
+  const mapRemountKey = `${cities.length}-${normalized.map((s) => s.id).join("|")}-${Object.keys(pathsById).length}`;
+
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-border bg-muted/30" style={{ minHeight: 420 }}>
       <div className="pointer-events-none absolute right-2 top-2 z-[400] max-w-[200px] rounded-md border border-border bg-card/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur-sm sm:max-w-none">
         <p className="font-semibold text-foreground">Shipment routes</p>
         <p className="mt-1 text-muted-foreground">
-          Each colored line is one shipment (hue by status; shifts if several share a status). Faint underlay = full path; bold = completed; dashed = remaining.
+          Line color matches shipment status (legend below). Faint band = full route; bold = completed; dashed = still to go.
         </p>
         <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
           <li>
@@ -321,60 +349,81 @@ export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; 
         </ul>
       </div>
 
-      <MapContainer center={center} zoom={6} className="z-0 h-[420px] w-full" scrollWheelZoom attributionControl>
+      <MapContainer
+        key={mapRemountKey}
+        center={center}
+        zoom={6}
+        className="z-0 h-[420px] w-full [&_.leaflet-tile-pane]:z-0"
+        scrollWheelZoom
+        attributionControl
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {fitPoints.length > 0 && <FitBounds points={fitPoints} maxZoom={routes.length <= 2 ? 11 : 9} />}
+        <MapInvalidate deps={mapRemountKey} />
 
-        {/* Full route underlay (shipment-colored, subtle) */}
-        {routes.map((r) => (
-          <Polyline
-            key={`${r.key}-full`}
-            positions={r.path}
-            pathOptions={{
-              color: r.lineColor,
-              weight: 12,
-              opacity: 0.22,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        ))}
+        <Pane name="shipment-route-lines" style={{ zIndex: 650 }}>
+          {/* Full route underlay (shipment-colored, subtle) */}
+          {routes.map((r) => {
+            const positions = cleanLatLngs(r.path);
+            if (positions.length < 2) return null;
+            return (
+              <Polyline
+                key={`${r.key}-full`}
+                positions={positions}
+                pathOptions={{
+                  color: r.lineColor,
+                  weight: 12,
+                  opacity: 0.28,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
+              />
+            );
+          })}
 
-        {/* Remaining leg — dashed, same shipment color (not gray) */}
-        {routes.map((r) =>
-          r.status === "delivered" ? null : (
-            <Polyline
-              key={`${r.key}-remain`}
-              positions={r.remaining}
-              pathOptions={{
-                color: r.lineColor,
-                weight: 5,
-                opacity: 0.42,
-                dashArray: "12 10",
-                lineCap: "round",
-                lineJoin: "round",
-              }}
-            />
-          ),
-        )}
+          {/* Remaining leg — dashed */}
+          {routes.map((r) => {
+            if (r.status === "delivered") return null;
+            const positions = cleanLatLngs(r.remaining);
+            if (positions.length < 2) return null;
+            return (
+              <Polyline
+                key={`${r.key}-remain`}
+                positions={positions}
+                pathOptions={{
+                  color: r.lineColor,
+                  weight: 6,
+                  opacity: 0.55,
+                  dashArray: "14 12",
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
+              />
+            );
+          })}
 
-        {/* Completed leg — bold, full opacity */}
-        {routes.map((r) => (
-          <Polyline
-            key={`${r.key}-done`}
-            positions={r.completed}
-            pathOptions={{
-              color: r.lineColor,
-              weight: 7,
-              opacity: 1,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
-        ))}
+          {/* Completed leg — bold */}
+          {routes.map((r) => {
+            const positions = cleanLatLngs(r.completed);
+            if (positions.length < 2) return null;
+            return (
+              <Polyline
+                key={`${r.key}-done`}
+                positions={positions}
+                pathOptions={{
+                  color: r.lineColor,
+                  weight: 8,
+                  opacity: 1,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
+              />
+            );
+          })}
+        </Pane>
 
         {cities.map((city) => (
           <Marker key={city.en} position={[city.lat, city.lng]}>
