@@ -60,6 +60,47 @@ router.get('/cities', authenticate, (_req: Request, res: Response) => {
   ]);
 });
 
+/** Driving route geometry (OSRM) — proxy avoids browser CORS; fallback is straight line */
+router.get('/route-geometry', authenticate, async (req: Request, res: Response) => {
+  const fromLat = parseFloat(String(req.query.fromLat ?? ''));
+  const fromLng = parseFloat(String(req.query.fromLng ?? ''));
+  const toLat = parseFloat(String(req.query.toLat ?? ''));
+  const toLng = parseFloat(String(req.query.toLng ?? ''));
+  if ([fromLat, fromLng, toLat, toLng].some((n) => Number.isNaN(n))) {
+    res.status(400).json({ error: 'Invalid coordinates' });
+    return;
+  }
+
+  const straight = (): { coordinates: [number, number][]; fallback: boolean } => ({
+    coordinates: [
+      [fromLat, fromLng],
+      [toLat, toLng],
+    ],
+    fallback: true,
+  });
+
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'myan-supply-flow/1.0' } });
+    if (!r.ok) {
+      res.json(straight());
+      return;
+    }
+    const data = (await r.json()) as {
+      routes?: { geometry?: { coordinates?: [number, number][] } }[];
+    };
+    const coords = data.routes?.[0]?.geometry?.coordinates;
+    if (!coords?.length) {
+      res.json(straight());
+      return;
+    }
+    const latLng: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
+    res.json({ coordinates: latLng, fallback: false });
+  } catch {
+    res.json(straight());
+  }
+});
+
 router.get('/:id', authenticate, (req: Request, res: Response) => {
 
   const shipment = prepare(`

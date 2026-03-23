@@ -106,13 +106,13 @@ export default function Shipments() {
       <div className="card-elevated p-4 sm:p-6">
         <h3 className="font-semibold mb-1">Myanmar route map</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Each route shows <strong className="text-foreground">progress</strong>: solid line = completed so far, dashed = still to go.
-          The marker is the current stage (click for details). “In transit” pulses on the map.
+          Routes are built from each shipment’s <strong className="text-foreground">from → to</strong> cities (road path when available).
+          Solid = completed; dashed = remaining. Click a truck/status marker for details.
         </p>
         {cities.length > 0 && (
           <ShipmentMap
             cities={cities.filter((c: any) => typeof c.lat === "number" && typeof c.lng === "number")}
-            shipments={shipments}
+            shipments={shipments as unknown[]}
           />
         )}
       </div>

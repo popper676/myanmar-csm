@@ -68,6 +68,15 @@ export const shipmentApi = {
   updateStatus: (id: string, status: string) =>
     api(`/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   cities: () => api('/shipments/cities'),
+  routeGeometry: (params: { fromLat: number; fromLng: number; toLat: number; toLng: number }) => {
+    const qs = new URLSearchParams({
+      fromLat: String(params.fromLat),
+      fromLng: String(params.fromLng),
+      toLat: String(params.toLat),
+      toLng: String(params.toLng),
+    });
+    return api<{ coordinates: [number, number][]; fallback?: boolean }>(`/shipments/route-geometry?${qs}`);
+  },
 };
 
 // ─── Suppliers ───────────────────────────────────────
