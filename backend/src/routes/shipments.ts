@@ -49,14 +49,22 @@ router.get('/', authenticate, validate(shipmentQuerySchema, 'query'), (req: Requ
 });
 
 router.get('/cities', authenticate, (_req: Request, res: Response) => {
-  // lat/lng approximations for OpenStreetMap — legacy x/y kept for any old clients
   res.json([
-    { en: 'Yangon', mm: 'ရန်ကုန်', x: 50, y: 80, lat: 16.866, lng: 96.195 },
-    { en: 'Bago', mm: 'ပဲခူး', x: 55, y: 70, lat: 17.335, lng: 96.481 },
-    { en: 'Naypyidaw', mm: 'နေပြည်တော်', x: 50, y: 50, lat: 19.763, lng: 96.079 },
-    { en: 'Mandalay', mm: 'မန္တလေး', x: 52, y: 30, lat: 21.959, lng: 96.089 },
-    { en: 'Mawlamyine', mm: 'မော်လမြိုင်', x: 65, y: 75, lat: 16.491, lng: 97.628 },
-    { en: 'Taunggyi', mm: 'တောင်ကြီး', x: 70, y: 45, lat: 20.789, lng: 97.038 },
+    { en: 'Yangon',     mm: 'ရန်ကုန်',     lat: 16.8661, lng: 96.1951 },
+    { en: 'Bago',       mm: 'ပဲခူး',       lat: 17.3352, lng: 96.4814 },
+    { en: 'Naypyidaw',  mm: 'နေပြည်တော်',  lat: 19.7633, lng: 96.0785 },
+    { en: 'Mandalay',   mm: 'မန္တလေး',     lat: 21.9588, lng: 96.0891 },
+    { en: 'Mawlamyine', mm: 'မော်လမြိုင်', lat: 16.4905, lng: 97.6285 },
+    { en: 'Taunggyi',   mm: 'တောင်ကြီး',   lat: 20.7893, lng: 97.0378 },
+    { en: 'Myitkyina',  mm: 'မြစ်ကြီးနား', lat: 25.3867, lng: 97.3958 },
+    { en: 'Pathein',    mm: 'ပုသိမ်',      lat: 16.7792, lng: 94.7326 },
+    { en: 'Sagaing',    mm: 'စစ်ကိုင်း',   lat: 21.8787, lng: 95.9785 },
+    { en: 'Lashio',     mm: 'လားရှိုး',     lat: 22.9362, lng: 97.7499 },
+    { en: 'Meiktila',   mm: 'မိတ္ထီလာ',    lat: 20.8814, lng: 95.8585 },
+    { en: 'Pyay',       mm: 'ပြည်',        lat: 18.8240, lng: 95.2218 },
+    { en: 'Magway',     mm: 'မကွေး',       lat: 20.1487, lng: 94.9196 },
+    { en: 'Dawei',      mm: 'ထားဝယ်',      lat: 14.0823, lng: 98.1915 },
+    { en: 'Sittwe',     mm: 'စစ်တွေ',      lat: 20.1461, lng: 92.8984 },
   ]);
 });
 

@@ -1,458 +1,268 @@
-import { useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Pane, useMap } from "react-leaflet";
+import { useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { ShipmentStatus } from "@/data/dummy-data";
-import { shipmentApi } from "@/lib/api";
-import { pointAtFractionAlongPolyline, slicePolylineFromFraction, slicePolylineToFraction } from "@/lib/routePolyline";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default as any).prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
 
-export type MapCity = {
-  en: string;
-  mm: string;
-  lat: number;
-  lng: number;
+/** Accurate lat/lng for Myanmar cities — used as ground truth regardless of backend */
+const MYANMAR_CITIES: Record<string, { lat: number; lng: number; mm: string }> = {
+  Yangon:      { lat: 16.8661, lng: 96.1951, mm: "ရန်ကုန်" },
+  Bago:        { lat: 17.3352, lng: 96.4814, mm: "ပဲခူး" },
+  Naypyidaw:   { lat: 19.7633, lng: 96.0785, mm: "နေပြည်တော်" },
+  Mandalay:    { lat: 21.9588, lng: 96.0891, mm: "မန္တလေး" },
+  Mawlamyine:  { lat: 16.4905, lng: 97.6285, mm: "မော်လမြိုင်" },
+  Taunggyi:    { lat: 20.7893, lng: 97.0378, mm: "တောင်ကြီး" },
+  Myitkyina:   { lat: 25.3867, lng: 97.3958, mm: "မြစ်ကြီးနား" },
+  Pathein:     { lat: 16.7792, lng: 94.7326, mm: "ပုသိမ်" },
+  Sagaing:     { lat: 21.8787, lng: 95.9785, mm: "စစ်ကိုင်း" },
+  Lashio:      { lat: 22.9362, lng: 97.7499, mm: "လားရှိုး" },
+  Meiktila:    { lat: 20.8814, lng: 95.8585, mm: "မိတ္ထီလာ" },
+  Pyay:        { lat: 18.8240, lng: 95.2218, mm: "ပြည်" },
+  Hpa_An:      { lat: 16.8907, lng: 97.6346, mm: "ဘားအံ" },
+  Magway:      { lat: 20.1487, lng: 94.9196, mm: "မကွေး" },
+  Dawei:       { lat: 14.0823, lng: 98.1915, mm: "ထားဝယ်" },
+  Sittwe:      { lat: 20.1461, lng: 92.8984, mm: "စစ်တွေ" },
 };
 
-type ShipmentLike = {
+function resolveCity(name: string): { lat: number; lng: number; mm: string } | null {
+  const direct = MYANMAR_CITIES[name];
+  if (direct) return direct;
+  const lower = name.trim().toLowerCase();
+  for (const [key, val] of Object.entries(MYANMAR_CITIES)) {
+    if (key.toLowerCase() === lower) return val;
+  }
+  return null;
+}
+
+type ShipmentStatus = "ordered" | "dispatched" | "in_transit" | "customs" | "delivered";
+
+const STATUS_COLORS: Record<ShipmentStatus, string> = {
+  ordered:    "#6366f1",
+  dispatched: "#0ea5e9",
+  in_transit: "#f59e0b",
+  customs:    "#ef4444",
+  delivered:  "#22c55e",
+};
+
+const STATUS_LABELS: Record<ShipmentStatus, string> = {
+  ordered:    "Ordered",
+  dispatched: "Dispatched",
+  in_transit: "In Transit",
+  customs:    "Customs",
+  delivered:  "Delivered",
+};
+
+function statusIcon(status: ShipmentStatus): L.DivIcon {
+  const color = STATUS_COLORS[status] ?? "#6366f1";
+  const label = STATUS_LABELS[status] ?? status;
+  return L.divIcon({
+    className: "shipment-map-div-icon",
+    html: `<div style="
+      background: ${color};
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      ${status === "in_transit" ? "animation: shipmentMapPulse 2s ease-in-out infinite;" : ""}
+    ">${label}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 12],
+    popupAnchor: [0, -18],
+  });
+}
+
+type ShipmentRow = {
   id: string;
   shipmentId: string;
   from: { en: string };
   to: { en: string };
   status: ShipmentStatus;
+  carrier?: string;
+  trackingNumber?: string;
 };
 
-/** Accept API shape with nested `from`/`to` or legacy flat fields */
-export function normalizeShipmentForMap(raw: Record<string, unknown>): ShipmentLike | null {
-  const fromObj = raw.from as { en?: string } | undefined;
-  const toObj = raw.to as { en?: string } | undefined;
-  const fromEn = fromObj?.en ?? (raw.fromEn as string | undefined);
-  const toEn = toObj?.en ?? (raw.toEn as string | undefined);
-  const status = raw.status as ShipmentStatus | undefined;
-  const id = raw.id != null && raw.id !== "" ? String(raw.id) : "";
-  const shipmentId = raw.shipmentId != null ? String(raw.shipmentId) : "";
-  if (!fromEn || !toEn || !status || !id) return null;
-  return {
-    id,
-    shipmentId,
-    from: { en: fromEn },
-    to: { en: toEn },
-    status,
-  };
+/** Lerp for progress marker (0→1) */
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * Math.min(1, Math.max(0, t));
 }
 
-const statusSteps: ShipmentStatus[] = ["ordered", "dispatched", "in_transit", "customs", "delivered"];
-
-const statusLabels: Record<ShipmentStatus, string> = {
-  ordered: "Ordered",
-  dispatched: "Dispatched",
-  in_transit: "In transit",
-  customs: "Customs",
-  delivered: "Delivered",
-};
-
-const statusProgress: Record<ShipmentStatus, number> = {
-  ordered: 0.06,
-  dispatched: 0.22,
-  in_transit: 0.52,
-  customs: 0.82,
+const PROGRESS_MAP: Record<ShipmentStatus, number> = {
+  ordered: 0.05,
+  dispatched: 0.2,
+  in_transit: 0.5,
+  customs: 0.8,
   delivered: 1,
 };
 
-/** Base colors (legend + markers) */
-const routeColors: Record<ShipmentStatus, string> = {
-  ordered: "#64748b",
-  dispatched: "#0ea5e9",
-  in_transit: "#d97706",
-  customs: "#ca8a04",
-  delivered: "#16a34a",
-};
-
-/** Polylines use hex (reliable for SVG stroke). Space-separated hsl() can fail on some SVG engines. */
-function lineColorForShipment(status: ShipmentStatus, shipmentIndex: number): string {
-  void shipmentIndex;
-  return routeColors[status] ?? "#2563eb";
+function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
+  const map = useMap();
+  useEffect(() => {
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 10 });
+  }, [map, bounds]);
+  return null;
 }
 
-function buildCityLookup(cities: MapCity[]) {
-  const m = new Map<string, MapCity>();
-  for (const c of cities) {
-    const k = c.en.trim();
-    m.set(k, c);
-    m.set(k.toLowerCase(), c);
+type Props = {
+  cities: { en: string; mm?: string; lat?: number; lng?: number }[];
+  shipments: unknown[];
+};
+
+export default function ShipmentMap({ shipments }: Props) {
+  const rows: ShipmentRow[] = [];
+  for (const raw of shipments) {
+    const r = raw as Record<string, unknown>;
+    const fromObj = r.from as { en?: string } | undefined;
+    const toObj = r.to as { en?: string } | undefined;
+    const fromEn = fromObj?.en ?? (r.fromEn as string | undefined);
+    const toEn = toObj?.en ?? (r.toEn as string | undefined);
+    const status = r.status as ShipmentStatus | undefined;
+    if (!fromEn || !toEn || !status) continue;
+    rows.push({
+      id: String(r.id ?? ""),
+      shipmentId: String(r.shipmentId ?? ""),
+      from: { en: fromEn },
+      to: { en: toEn },
+      status,
+      carrier: (r.carrier as string) ?? "",
+      trackingNumber: (r.trackingNumber as string) ?? "",
+    });
   }
-  return (name: string): MapCity | undefined => {
-    const n = name.trim();
-    return m.get(n) ?? m.get(n.toLowerCase());
+
+  type RouteInfo = {
+    row: ShipmentRow;
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+    color: string;
+    progress: [number, number];
   };
-}
 
-function cleanLatLngs(pts: [number, number][]): [number, number][] {
-  const out = pts.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
-  if (out.length >= 2) return out;
-  if (out.length === 1) return [out[0], out[0]];
-  return [];
-}
+  const routes: RouteInfo[] = [];
+  const allLatLngs: [number, number][] = [];
+  const drawnCities = new Set<string>();
 
-function straightLine(from: MapCity, to: MapCity): [number, number][] {
-  return [
-    [from.lat, from.lng],
-    [to.lat, to.lng],
-  ];
-}
+  for (const row of rows) {
+    const from = resolveCity(row.from.en);
+    const to = resolveCity(row.to.en);
+    if (!from || !to) continue;
 
-function interpolate(from: MapCity, to: MapCity, t: number): [number, number] {
-  const clamped = Math.min(1, Math.max(0, t));
-  return [from.lat + clamped * (to.lat - from.lat), from.lng + clamped * (to.lng - from.lng)];
-}
+    const color = STATUS_COLORS[row.status] ?? "#6366f1";
+    const t = PROGRESS_MAP[row.status] ?? 0.5;
+    const progressLat = lerp(from.lat, to.lat, t);
+    const progressLng = lerp(from.lng, to.lng, t);
 
-function progressIcon(color: string, emoji: string, pulse: boolean): L.DivIcon {
-  const pulseClass = pulse ? " shipment-map-marker-pulse" : "";
-  return L.divIcon({
-    className: "shipment-map-div-icon",
-    html: `<div class="shipment-map-marker-inner${pulseClass}" style="background:${color};border-color:${color}">${emoji}</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -14],
-  });
-}
-
-function statusEmoji(status: ShipmentStatus): string {
-  switch (status) {
-    case "ordered":
-      return "📋";
-    case "dispatched":
-      return "🏭";
-    case "in_transit":
-      return "🚚";
-    case "customs":
-      return "🛃";
-    case "delivered":
-      return "✅";
-    default:
-      return "📦";
+    routes.push({ row, from, to, color, progress: [progressLat, progressLng] });
+    allLatLngs.push([from.lat, from.lng], [to.lat, to.lng]);
+    drawnCities.add(row.from.en);
+    drawnCities.add(row.to.en);
   }
-}
 
-function FitBounds({ points, maxZoom = 10 }: { points: [number, number][]; maxZoom?: number }) {
-  const map = useMap();
-  useEffect(() => {
-    if (points.length === 0) return;
-    if (points.length === 1) {
-      map.setView(points[0], Math.min(maxZoom, 11));
-      return;
-    }
-    const bounds = L.latLngBounds(points.map((p) => L.latLng(p[0], p[1])));
-    map.fitBounds(bounds, { padding: [48, 48], maxZoom });
-  }, [map, points, maxZoom]);
-  return null;
-}
+  if (allLatLngs.length === 0) {
+    allLatLngs.push([16.87, 96.20], [21.96, 96.09]);
+  }
 
-/** React-Leaflet sometimes needs a nudge after polylines mount or container layout settles */
-function MapInvalidate({ deps }: { deps: unknown }) {
-  const map = useMap();
-  useEffect(() => {
-    const run = () => {
-      map.invalidateSize({ animate: false });
-    };
-    run();
-    const t = requestAnimationFrame(run);
-    const t2 = window.setTimeout(run, 250);
-    return () => {
-      cancelAnimationFrame(t);
-      window.clearTimeout(t2);
-    };
-  }, [map, deps]);
-  return null;
-}
-
-type RouteProcess = {
-  key: string;
-  shipmentId: string;
-  status: ShipmentStatus;
-  statusLabel: string;
-  step: number;
-  /** Marker / popup accent (hex from status) */
-  color: string;
-  /** Polyline color (HSL, unique per shipment when many on map) */
-  lineColor: string;
-  completed: [number, number][];
-  remaining: [number, number][];
-  markerPos: [number, number];
-  icon: L.DivIcon;
-  path: [number, number][];
-};
-
-export default function ShipmentMap({ cities, shipments }: { cities: MapCity[]; shipments: unknown[] }) {
-  const resolveCity = useMemo(() => buildCityLookup(cities), [cities]);
-
-  const normalized = useMemo(() => {
-    const out: ShipmentLike[] = [];
-    for (const raw of shipments) {
-      const n = normalizeShipmentForMap(raw as Record<string, unknown>);
-      if (n) out.push(n);
-    }
-    return out;
-  }, [shipments]);
-
-  const [pathsById, setPathsById] = useState<Record<string, [number, number][]>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      const pairKey = (from: MapCity, to: MapCity) =>
-        `${from.lat.toFixed(4)},${from.lng.toFixed(4)}|${to.lat.toFixed(4)},${to.lng.toFixed(4)}`;
-      const uniquePairs = new Map<string, { from: MapCity; to: MapCity; ids: string[] }>();
-
-      for (const s of normalized) {
-        const from = resolveCity(s.from.en);
-        const to = resolveCity(s.to.en);
-        if (!from || !to) continue;
-        const k = pairKey(from, to);
-        if (!uniquePairs.has(k)) uniquePairs.set(k, { from, to, ids: [] });
-        uniquePairs.get(k)!.ids.push(s.id);
-      }
-
-      const updates: Record<string, [number, number][]> = {};
-
-      await Promise.all(
-        [...uniquePairs.values()].map(async ({ from, to, ids }) => {
-          try {
-            const res = await shipmentApi.routeGeometry({
-              fromLat: from.lat,
-              fromLng: from.lng,
-              toLat: to.lat,
-              toLng: to.lng,
-            });
-            const coords = res.coordinates?.length ? res.coordinates : straightLine(from, to);
-            for (const id of ids) updates[id] = coords;
-          } catch {
-            const line = straightLine(from, to);
-            for (const id of ids) updates[id] = line;
-          }
-        }),
-      );
-
-      if (!cancelled) {
-        setPathsById((prev) => ({ ...prev, ...updates }));
-      }
-    }
-
-    if (normalized.length > 0 && cities.length > 0) {
-      void load();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [normalized, resolveCity, cities.length]);
-
-  const routes: RouteProcess[] = useMemo(() => {
-    const out: RouteProcess[] = [];
-    let shipmentIndex = 0;
-    for (const s of normalized) {
-      const from = resolveCity(s.from.en);
-      const to = resolveCity(s.to.en);
-      if (!from || !to) continue;
-
-      const path = cleanLatLngs(pathsById[s.id] ?? straightLine(from, to));
-      const t = statusProgress[s.status] ?? 0;
-      const color = routeColors[s.status] ?? "#64748b";
-      const lineColor = lineColorForShipment(s.status, shipmentIndex);
-      shipmentIndex += 1;
-      const step = statusSteps.indexOf(s.status);
-      const pulse = s.status === "in_transit";
-
-      let completed: [number, number][];
-      let remaining: [number, number][];
-      let markerPos: [number, number];
-
-      if (path.length >= 2) {
-        completed = cleanLatLngs(slicePolylineToFraction(path, t));
-        remaining = cleanLatLngs(slicePolylineFromFraction(path, t));
-        markerPos = pointAtFractionAlongPolyline(path, t);
-      } else {
-        completed = [interpolate(from, to, 0), interpolate(from, to, t)];
-        remaining = [interpolate(from, to, t), interpolate(from, to, 1)];
-        markerPos = interpolate(from, to, t);
-      }
-
-      out.push({
-        key: s.id,
-        shipmentId: s.shipmentId,
-        status: s.status,
-        statusLabel: statusLabels[s.status],
-        step: step >= 0 ? step + 1 : 1,
-        color,
-        lineColor,
-        completed,
-        remaining,
-        markerPos,
-        icon: progressIcon(color, statusEmoji(s.status), pulse),
-        path,
-      });
-    }
-    return out;
-  }, [normalized, resolveCity, pathsById]);
-
-  /** Fit map to shipment routes (not every city) so Bago→Yangon is visible */
-  const fitPoints = useMemo(() => {
-    const pts: [number, number][] = [];
-    for (const r of routes) {
-      for (const p of r.path) pts.push(p);
-    }
-    if (pts.length === 0) {
-      return cities.map((c) => [c.lat, c.lng] as [number, number]);
-    }
-    return pts;
-  }, [routes, cities]);
-
-  const center: [number, number] = [19.5, 96.0];
-
-  /** Remount map when route geometry arrives so polylines reliably attach (react-leaflet edge cases) */
-  const mapRemountKey = `${cities.length}-${normalized.map((s) => s.id).join("|")}-${Object.keys(pathsById).length}`;
+  const bounds = L.latLngBounds(allLatLngs.map(([lat, lng]) => L.latLng(lat, lng)));
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg border border-border bg-muted/30" style={{ minHeight: 420 }}>
-      <div className="pointer-events-none absolute right-2 top-2 z-[400] max-w-[200px] rounded-md border border-border bg-card/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur-sm sm:max-w-none">
-        <p className="font-semibold text-foreground">Shipment routes</p>
-        <p className="mt-1 text-muted-foreground">
-          Line color matches shipment status (legend below). Faint band = full route; bold = completed; dashed = still to go.
-        </p>
-        <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
-          <li>
-            <span className="inline-block h-2 w-4 rounded-sm align-middle" style={{ background: routeColors.ordered }} /> Ordered
-          </li>
-          <li>
-            <span className="inline-block h-2 w-4 rounded-sm align-middle" style={{ background: routeColors.dispatched }} /> Dispatched
-          </li>
-          <li>
-            <span className="inline-block h-2 w-4 rounded-sm align-middle" style={{ background: routeColors.in_transit }} /> In transit
-          </li>
-          <li>
-            <span className="inline-block h-2 w-4 rounded-sm align-middle" style={{ background: routeColors.customs }} /> Customs
-          </li>
-          <li>
-            <span className="inline-block h-2 w-4 rounded-sm align-middle" style={{ background: routeColors.delivered }} /> Delivered
-          </li>
-        </ul>
+    <div className="relative w-full overflow-hidden rounded-lg border border-border" style={{ minHeight: 440 }}>
+      {/* Legend */}
+      <div className="pointer-events-none absolute right-2 top-2 z-[1000] rounded-md border bg-white/95 px-3 py-2 text-[11px] shadow-md dark:bg-zinc-900/95 dark:border-zinc-700">
+        <p className="font-bold mb-1">Route colors</p>
+        {(Object.entries(STATUS_COLORS) as [ShipmentStatus, string][]).map(([s, c]) => (
+          <div key={s} className="flex items-center gap-1.5">
+            <span className="inline-block h-[4px] w-5 rounded-full" style={{ background: c }} />
+            <span>{STATUS_LABELS[s]}</span>
+          </div>
+        ))}
       </div>
 
-      <MapContainer
-        key={mapRemountKey}
-        center={center}
-        zoom={6}
-        className="z-0 h-[420px] w-full [&_.leaflet-tile-pane]:z-0"
-        scrollWheelZoom
-        attributionControl
-      >
+      <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full" style={{ height: 440 }} scrollWheelZoom>
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {fitPoints.length > 0 && <FitBounds points={fitPoints} maxZoom={routes.length <= 2 ? 11 : 9} />}
-        <MapInvalidate deps={mapRemountKey} />
+        <FitBounds bounds={bounds} />
 
-        <Pane name="shipment-route-lines" style={{ zIndex: 650 }}>
-          {/* Full route underlay (shipment-colored, subtle) */}
-          {routes.map((r) => {
-            const positions = cleanLatLngs(r.path);
-            if (positions.length < 2) return null;
-            return (
-              <Polyline
-                key={`${r.key}-full`}
-                positions={positions}
-                pathOptions={{
-                  color: r.lineColor,
-                  weight: 12,
-                  opacity: 0.28,
-                  lineCap: "round",
-                  lineJoin: "round",
-                }}
-              />
-            );
-          })}
-
-          {/* Remaining leg — dashed */}
-          {routes.map((r) => {
-            if (r.status === "delivered") return null;
-            const positions = cleanLatLngs(r.remaining);
-            if (positions.length < 2) return null;
-            return (
-              <Polyline
-                key={`${r.key}-remain`}
-                positions={positions}
-                pathOptions={{
-                  color: r.lineColor,
-                  weight: 6,
-                  opacity: 0.55,
-                  dashArray: "14 12",
-                  lineCap: "round",
-                  lineJoin: "round",
-                }}
-              />
-            );
-          })}
-
-          {/* Completed leg — bold */}
-          {routes.map((r) => {
-            const positions = cleanLatLngs(r.completed);
-            if (positions.length < 2) return null;
-            return (
-              <Polyline
-                key={`${r.key}-done`}
-                positions={positions}
-                pathOptions={{
-                  color: r.lineColor,
-                  weight: 8,
-                  opacity: 1,
-                  lineCap: "round",
-                  lineJoin: "round",
-                }}
-              />
-            );
-          })}
-        </Pane>
-
-        {cities.map((city) => (
-          <Marker key={city.en} position={[city.lat, city.lng]}>
+        {/* Draw route lines */}
+        {routes.map((r, i) => (
+          <Polyline
+            key={`route-${r.row.id}-${i}`}
+            positions={[
+              [r.from.lat, r.from.lng],
+              [r.to.lat, r.to.lng],
+            ]}
+            pathOptions={{
+              color: r.color,
+              weight: 5,
+              opacity: 0.9,
+            }}
+          >
             <Popup>
-              <div className="text-sm">
-                <strong>{city.en}</strong>
-                <div className="font-myanmar text-muted-foreground">{city.mm}</div>
+              <div style={{ minWidth: 160 }}>
+                <strong>{r.row.shipmentId}</strong>
+                <div>{r.row.from.en} → {r.row.to.en}</div>
+                <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
+                {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
               </div>
             </Popup>
-          </Marker>
+          </Polyline>
         ))}
 
-        {routes.map((r) => (
-          <Marker key={`${r.key}-prog`} position={r.markerPos} icon={r.icon} zIndexOffset={800}>
+        {/* City circle markers with labels */}
+        {[...drawnCities].map((cityName) => {
+          const city = resolveCity(cityName);
+          if (!city) return null;
+          const mm = city.mm ?? "";
+          return (
+            <CircleMarker
+              key={`city-${cityName}`}
+              center={[city.lat, city.lng]}
+              radius={8}
+              pathOptions={{ color: "#1e293b", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }}
+            >
+              <Tooltip permanent direction="top" offset={[0, -10]} className="city-label-tooltip">
+                <span style={{ fontWeight: 700, fontSize: 12 }}>{cityName}</span>
+                {mm && <span style={{ display: "block", fontSize: 10, opacity: 0.7 }}>{mm}</span>}
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
+
+        {/* Progress markers on route */}
+        {routes.map((r, i) => (
+          <Marker
+            key={`prog-${r.row.id}-${i}`}
+            position={r.progress}
+            icon={statusIcon(r.row.status)}
+            zIndexOffset={900}
+          >
             <Popup>
-              <div className="min-w-[160px] text-sm">
-                <p className="font-mono text-xs text-muted-foreground">{r.shipmentId}</p>
-                <p className="mt-1 font-semibold">{r.statusLabel}</p>
-                <p className="text-xs text-muted-foreground">
-                  Step {r.step} of {statusSteps.length} · Progress along route
-                </p>
+              <div style={{ minWidth: 140 }}>
+                <strong>{r.row.shipmentId}</strong>
+                <div>{r.row.from.en} → {r.row.to.en}</div>
+                <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
               </div>
             </Popup>
           </Marker>
         ))}
       </MapContainer>
 
-      <p className="pointer-events-none absolute bottom-2 left-2 right-2 rounded bg-background/90 px-2 py-1 text-[10px] text-muted-foreground backdrop-blur-sm sm:pr-[220px]">
-        Map © OpenStreetMap · Road paths via OSRM (demo) when available.
+      <p className="pointer-events-none absolute bottom-1 left-2 right-2 text-[9px] text-muted-foreground opacity-70">
+        © OpenStreetMap contributors · Free tiles, no API key.
       </p>
     </div>
   );

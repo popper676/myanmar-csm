@@ -172,13 +172,23 @@
   50% { transform: scale(1.5); opacity: 0.6; }
 }
 
-/* Leaflet: keep vector strokes visible (Tailwind * { border-color } / resets can affect SVG) */
-.leaflet-container .leaflet-overlay-pane svg path.leaflet-interactive {
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* Leaflet: Tailwind global * { border-color } can break SVG strokes — reset */
+.leaflet-container svg path {
+  border-color: transparent;
 }
-.leaflet-container .leaflet-overlay-pane svg path {
-  fill-rule: evenodd;
+
+/* City label tooltip */
+.city-label-tooltip.leaflet-tooltip {
+  background: rgba(30, 41, 59, 0.92);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.city-label-tooltip.leaflet-tooltip::before {
+  border-top-color: rgba(30, 41, 59, 0.92);
 }
 
 /* Leaflet: custom shipment progress markers (DivIcon) */
