@@ -172,16 +172,13 @@ router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validat
   const existing = prepare('SELECT id, status FROM shipments WHERE id = ?').get(id) as any;
   if (!existing) throw new AppError(404, 'Shipment not found');
 
-  const validTransitions: Record<string, string[]> = {
-    ordered: ['dispatched'],
-    dispatched: ['in_transit'],
-    in_transit: ['customs', 'delivered'],
-    customs: ['delivered'],
-    delivered: [],
-  };
-
-  if (!validTransitions[existing.status]?.includes(status)) {
-    throw new AppError(400, `Cannot transition from '${existing.status}' to '${status}'`);
+  const allStatuses = ['ordered', 'dispatched', 'in_transit', 'customs', 'delivered'];
+  if (!allStatuses.includes(status)) {
+    throw new AppError(400, `Invalid status: '${status}'`);
+  }
+  if (existing.status === status) {
+    res.json({ message: 'Status unchanged' });
+    return;
   }
 
   const daysRemaining = status === 'delivered' ? 0 : undefined;

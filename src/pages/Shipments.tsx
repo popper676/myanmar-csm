@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Filter, Truck, Loader2 } from "lucide-react";
+import { Plus, X, Filter, Truck, Loader2, ChevronRight } from "lucide-react";
 import { shipmentApi } from "@/lib/api";
 import type { ShipmentStatus } from "@/data/dummy-data";
 import ShipmentMap from "@/components/ShipmentMap";
@@ -46,6 +46,20 @@ export default function Shipments() {
   useEffect(() => {
     shipmentApi.cities().then(setCities).catch(console.error);
   }, []);
+
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+
+  const handleStatusChange = async (shipmentId: string, newStatus: ShipmentStatus) => {
+    setUpdatingStatus(shipmentId);
+    try {
+      await shipmentApi.updateStatus(shipmentId, newStatus);
+      await fetchShipments();
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
   const [newShipment, setNewShipment] = useState({ from: '', to: '', carrier: '', dispatchDate: '', eta: '' });
 
@@ -125,8 +139,11 @@ export default function Shipments() {
             <p className="font-myanmar">ပေးပို့မှု မရှိသေးပါ</p>
             <p className="text-xs mt-1">No shipments found</p>
           </div>
-        ) : shipments.map((shipment: any, i: number) => (
-          <motion.div key={shipment.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card-elevated p-3 sm:p-5">
+        ) : shipments.map((shipment: any, i: number) => {
+          const currentIdx = statusSteps.indexOf(shipment.status);
+          const isUpdating = updatingStatus === shipment.id;
+          return (
+          <motion.div key={shipment.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className={`card-elevated p-3 sm:p-5 ${isUpdating ? "opacity-60 pointer-events-none" : ""}`}>
             <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="font-mono-data text-[10px] sm:text-xs text-muted-foreground">{shipment.shipmentId}</p>
@@ -141,22 +158,47 @@ export default function Shipments() {
               )}
             </div>
 
-            {/* Timeline */}
-            <div className="flex items-center gap-0.5 sm:gap-1 mb-3 sm:mb-4">
+            {/* Clickable Timeline */}
+            <p className="text-[9px] text-muted-foreground mb-1.5">Click a step to update status:</p>
+            <div className="flex items-center gap-0.5 sm:gap-1 mb-1">
               {statusSteps.map((step, si) => {
-                const currentIdx = statusSteps.indexOf(shipment.status);
                 const isActive = si === currentIdx;
                 const isPast = si < currentIdx;
+                const dotColor = isPast || isActive ? statusColors[shipment.status] : "bg-muted";
                 return (
                   <div key={step} className="flex items-center gap-0.5 sm:gap-1 flex-1">
-                    <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full flex-shrink-0 ${isPast || isActive ? statusColors[shipment.status] : "bg-muted"} ${isActive ? "animate-pulse-dot" : ""}`} />
+                    <button
+                      onClick={() => handleStatusChange(shipment.id, step)}
+                      disabled={isUpdating}
+                      title={`Set to ${statusLabels[step]}`}
+                      className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all
+                        ${isActive ? `${dotColor} border-foreground/40 ring-2 ring-offset-1 ring-primary/30 scale-110` : ""}
+                        ${isPast ? `${dotColor} border-transparent` : ""}
+                        ${!isPast && !isActive ? "bg-muted border-transparent" : ""}
+                        hover:scale-125 hover:ring-2 hover:ring-primary/50 hover:ring-offset-1 cursor-pointer`}
+                    >
+                      {isPast && <span className="text-white text-[8px] sm:text-[10px] font-bold">✓</span>}
+                      {isActive && (isUpdating
+                        ? <Loader2 className="w-2.5 h-2.5 animate-spin text-white" />
+                        : <span className="text-white text-[8px] sm:text-[10px] font-bold">●</span>
+                      )}
+                    </button>
                     {si < statusSteps.length - 1 && <div className={`h-0.5 flex-1 ${isPast ? statusColors[shipment.status] : "bg-muted"}`} />}
                   </div>
                 );
               })}
             </div>
             <div className="flex justify-between text-[8px] sm:text-[10px] text-muted-foreground mb-3 sm:mb-4">
-              {statusSteps.map((s) => <span key={s}>{statusLabels[s]}</span>)}
+              {statusSteps.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleStatusChange(shipment.id, s)}
+                  disabled={isUpdating}
+                  className={`hover:text-foreground hover:font-semibold cursor-pointer transition-colors ${s === shipment.status ? "text-foreground font-bold" : ""}`}
+                >
+                  {statusLabels[s]}
+                </button>
+              ))}
             </div>
 
             <div className="flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground border-t pt-2 sm:pt-3">
@@ -170,7 +212,8 @@ export default function Shipments() {
               </div>
             </div>
           </motion.div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add Shipment Modal */}
