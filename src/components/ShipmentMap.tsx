@@ -15,8 +15,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-/** Accurate lat/lng for Myanmar cities — used as ground truth regardless of backend */
-const MYANMAR_CITIES: Record<string, { lat: number; lng: number; mm: string }> = {
+/** Accurate lat/lng for cities — Myanmar, Thailand, China */
+const CITY_COORDS: Record<string, { lat: number; lng: number; mm: string }> = {
+  // ─── Myanmar ───
   Yangon:      { lat: 16.8661, lng: 96.1951, mm: "ရန်ကုန်" },
   Bago:        { lat: 17.3352, lng: 96.4814, mm: "ပဲခူး" },
   Naypyidaw:   { lat: 19.7633, lng: 96.0785, mm: "နေပြည်တော်" },
@@ -33,13 +34,38 @@ const MYANMAR_CITIES: Record<string, { lat: number; lng: number; mm: string }> =
   Magway:      { lat: 20.1487, lng: 94.9196, mm: "မကွေး" },
   Dawei:       { lat: 14.0823, lng: 98.1915, mm: "ထားဝယ်" },
   Sittwe:      { lat: 20.1461, lng: 92.8984, mm: "စစ်တွေ" },
+  Monywa:      { lat: 21.9139, lng: 95.1335, mm: "မုံရွာ" },
+  Myeik:       { lat: 12.4394, lng: 98.6006, mm: "မြိတ်" },
+  Hakha:       { lat: 22.6415, lng: 93.6162, mm: "ဟားခါး" },
+  Loikaw:      { lat: 19.6747, lng: 97.2099, mm: "လွိုင်ကော်" },
+  // ─── Thailand ───
+  Bangkok:       { lat: 13.7563, lng: 100.5018, mm: "ဘန်ကောက်" },
+  "Chiang Mai":  { lat: 18.7883, lng: 98.9853,  mm: "ချင်းမိုင်" },
+  "Chiang Rai":  { lat: 19.9105, lng: 99.8406,  mm: "ချင်းရိုင်" },
+  "Mae Sot":     { lat: 16.7130, lng: 98.5708,  mm: "မဲဆောက်" },
+  "Hat Yai":     { lat: 7.0040,  lng: 100.4747, mm: "ဟတ်ယိုင်" },
+  "Nakhon Ratchasima": { lat: 14.9799, lng: 102.0978, mm: "နခုန်ရာချစီမာ" },
+  Phuket:        { lat: 7.8804,  lng: 98.3923,  mm: "ဖူးခက်" },
+  "Khon Kaen":   { lat: 16.4322, lng: 102.8236, mm: "ခွန်ကဲန်" },
+  Ranong:        { lat: 9.9625,  lng: 98.6385,  mm: "ရနောင်း" },
+  // ─── China ───
+  Kunming:     { lat: 25.0389, lng: 102.7183, mm: "ကူမင်း" },
+  Ruili:       { lat: 24.0131, lng: 97.8561,  mm: "ရွှေလီ" },
+  Guangzhou:   { lat: 23.1291, lng: 113.2644, mm: "ကွမ်ကျိုး" },
+  Shenzhen:    { lat: 22.5431, lng: 114.0579, mm: "ရှင်ကျန်" },
+  Shanghai:    { lat: 31.2304, lng: 121.4737, mm: "ရှန်ဟိုင်း" },
+  Beijing:     { lat: 39.9042, lng: 116.4074, mm: "ပေကျင်း" },
+  Chengdu:     { lat: 30.5728, lng: 104.0668, mm: "ချိန်တူး" },
+  Nanning:     { lat: 22.8170, lng: 108.3665, mm: "နန်နင်း" },
+  Chongqing:   { lat: 29.4316, lng: 106.9123, mm: "ချုံကျင့်" },
+  Xiamen:      { lat: 24.4798, lng: 118.0894, mm: "ရှမင်" },
 };
 
 function resolveCity(name: string): { lat: number; lng: number; mm: string } | null {
-  const direct = MYANMAR_CITIES[name];
+  const direct = CITY_COORDS[name];
   if (direct) return direct;
   const lower = name.trim().toLowerCase();
-  for (const [key, val] of Object.entries(MYANMAR_CITIES)) {
+  for (const [key, val] of Object.entries(CITY_COORDS)) {
     if (key.toLowerCase() === lower) return val;
   }
   return null;
