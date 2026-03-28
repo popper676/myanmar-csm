@@ -67,6 +67,7 @@ export const shipmentApi = {
   create: (data: any) => api('/shipments', { method: 'POST', body: JSON.stringify(data) }),
   updateStatus: (id: string, status: string) =>
     api(`/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  delete: (id: string) => api(`/shipments/${id}`, { method: 'DELETE' }),
   cities: () => api('/shipments/cities'),
   routeGeometry: (params: { fromLat: number; fromLng: number; toLat: number; toLng: number }) => {
     const qs = new URLSearchParams({

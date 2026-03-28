@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Filter, Truck, Loader2, ChevronRight } from "lucide-react";
+import { Plus, X, Truck, Loader2, Trash2 } from "lucide-react";
 import { shipmentApi } from "@/lib/api";
 import type { ShipmentStatus } from "@/data/dummy-data";
 import ShipmentMap from "@/components/ShipmentMap";
@@ -58,6 +58,16 @@ export default function Shipments() {
       console.error("Failed to update status:", err);
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  const handleDeleteShipment = async (id: string, shipmentId: string) => {
+    if (!window.confirm(`Delete shipment ${shipmentId}?`)) return;
+    try {
+      await shipmentApi.delete(id);
+      fetchShipments();
+    } catch (err) {
+      console.error("Failed to delete shipment:", err);
     }
   };
 
@@ -151,11 +161,20 @@ export default function Shipments() {
                   {shipment.from.en} → {shipment.to.en}
                 </p>
               </div>
-              {shipment.daysRemaining > 0 && (
-                <span className="text-[10px] sm:text-xs font-medium bg-accent/20 text-accent-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded font-myanmar whitespace-nowrap flex-shrink-0">
-                  {shipment.daysRemaining} ရက်
-                </span>
-              )}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {shipment.daysRemaining > 0 && (
+                  <span className="text-[10px] sm:text-xs font-medium bg-accent/20 text-accent-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded font-myanmar whitespace-nowrap">
+                    {shipment.daysRemaining} ရက်
+                  </span>
+                )}
+                <button
+                  onClick={() => handleDeleteShipment(shipment.id, shipment.shipmentId)}
+                  title="Delete shipment"
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Clickable Timeline */}
