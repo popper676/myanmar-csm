@@ -11,7 +11,6 @@ const router = Router();
 router.get('/', authenticate, validate(shipmentQuerySchema, 'query'), (req: Request, res: Response) => {
   const { status, search } = req.query as any;
 
-
   let whereClause = 'WHERE 1=1';
   const params: any[] = [];
 
@@ -50,7 +49,6 @@ router.get('/', authenticate, validate(shipmentQuerySchema, 'query'), (req: Requ
 
 router.get('/cities', authenticate, (_req: Request, res: Response) => {
   res.json([
-    // Myanmar
     { en: 'Yangon',      mm: 'ရန်ကုန်',     lat: 16.8661, lng: 96.1951, country: 'MM' },
     { en: 'Bago',        mm: 'ပဲခူး',       lat: 17.3352, lng: 96.4814, country: 'MM' },
     { en: 'Naypyidaw',   mm: 'နေပြည်တော်',  lat: 19.7633, lng: 96.0785, country: 'MM' },
@@ -70,7 +68,6 @@ router.get('/cities', authenticate, (_req: Request, res: Response) => {
     { en: 'Myeik',       mm: 'မြိတ်',       lat: 12.4394, lng: 98.6006, country: 'MM' },
     { en: 'Hakha',       mm: 'ဟားခါး',      lat: 22.6415, lng: 93.6162, country: 'MM' },
     { en: 'Loikaw',      mm: 'လွိုင်ကော်',  lat: 19.6747, lng: 97.2099, country: 'MM' },
-    // Thailand
     { en: 'Bangkok',              mm: 'ဘန်ကောက်',       lat: 13.7563, lng: 100.5018, country: 'TH' },
     { en: 'Chiang Mai',           mm: 'ချင်းမိုင်',       lat: 18.7883, lng: 98.9853,  country: 'TH' },
     { en: 'Chiang Rai',           mm: 'ချင်းရိုင်',       lat: 19.9105, lng: 99.8406,  country: 'TH' },
@@ -80,7 +77,6 @@ router.get('/cities', authenticate, (_req: Request, res: Response) => {
     { en: 'Phuket',               mm: 'ဖူးခက်',          lat: 7.8804,  lng: 98.3923,  country: 'TH' },
     { en: 'Khon Kaen',            mm: 'ခွန်ကဲန်',        lat: 16.4322, lng: 102.8236, country: 'TH' },
     { en: 'Ranong',               mm: 'ရနောင်း',         lat: 9.9625,  lng: 98.6385,  country: 'TH' },
-    // China
     { en: 'Kunming',   mm: 'ကူမင်း',     lat: 25.0389, lng: 102.7183, country: 'CN' },
     { en: 'Ruili',     mm: 'ရွှေလီ',      lat: 24.0131, lng: 97.8561,  country: 'CN' },
     { en: 'Guangzhou',  mm: 'ကွမ်ကျိုး',   lat: 23.1291, lng: 113.2644, country: 'CN' },
@@ -94,49 +90,53 @@ router.get('/cities', authenticate, (_req: Request, res: Response) => {
   ]);
 });
 
-/** Driving route geometry (OSRM) — proxy avoids browser CORS; fallback is straight line */
-router.get('/route-geometry', authenticate, async (req: Request, res: Response) => {
-  const fromLat = parseFloat(String(req.query.fromLat ?? ''));
-  const fromLng = parseFloat(String(req.query.fromLng ?? ''));
-  const toLat = parseFloat(String(req.query.toLat ?? ''));
-  const toLng = parseFloat(String(req.query.toLng ?? ''));
-  if ([fromLat, fromLng, toLat, toLng].some((n) => Number.isNaN(n))) {
-    res.status(400).json({ error: 'Invalid coordinates' });
-    return;
-  }
+// ─── GPS Tracking (must be before /:id to avoid param conflict) ───
 
-  const straight = (): { coordinates: [number, number][]; fallback: boolean } => ({
-    coordinates: [
-      [fromLat, fromLng],
-      [toLat, toLng],
-    ],
-    fallback: true,
-  });
-
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'myan-supply-flow/1.0' } });
-    if (!r.ok) {
-      res.json(straight());
-      return;
-    }
-    const data = (await r.json()) as {
-      routes?: { geometry?: { coordinates?: [number, number][] } }[];
-    };
-    const coords = data.routes?.[0]?.geometry?.coordinates;
-    if (!coords?.length) {
-      res.json(straight());
-      return;
-    }
-    const latLng: [number, number][] = coords.map(([lng, lat]) => [lat, lng]);
-    res.json({ coordinates: latLng, fallback: false });
-  } catch {
-    res.json(straight());
-  }
+router.get('/gps/locations', authenticate, (_req: Request, res: Response) => {
+  const rows = prepare(`
+    SELECT g.shipment_id as shipmentId, g.lat, g.lng, g.speed, g.heading, g.accuracy,
+           g.updated_at as updatedAt
+    FROM gps_locations g
+    INNER JOIN shipments s ON s.id = g.shipment_id
+    WHERE s.status IN ('dispatched','in_transit','customs')
+    ORDER BY g.updated_at DESC
+  `).all();
+  res.json(rows);
 });
 
-router.get('/:id', authenticate, (req: Request, res: Response) => {
+router.post('/gps/update', authenticate, (req: Request, res: Response) => {
+  const { shipmentId, lat, lng, speed, heading, accuracy } = req.body;
+  if (!shipmentId || lat == null || lng == null) {
+    throw new AppError(400, 'shipmentId, lat, lng are required');
+  }
 
+  const shipment = prepare('SELECT id FROM shipments WHERE id = ?').get(shipmentId);
+  if (!shipment) throw new AppError(404, 'Shipment not found');
+
+  const existing = prepare('SELECT id FROM gps_locations WHERE shipment_id = ?').get(shipmentId) as any;
+  if (existing) {
+    prepare(`
+      UPDATE gps_locations SET lat = ?, lng = ?, speed = ?, heading = ?, accuracy = ?, updated_at = datetime('now')
+      WHERE shipment_id = ?
+    `).run(lat, lng, speed ?? null, heading ?? null, accuracy ?? null, shipmentId);
+  } else {
+    prepare(`
+      INSERT INTO gps_locations (id, shipment_id, lat, lng, speed, heading, accuracy)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(generateId(), shipmentId, lat, lng, speed ?? null, heading ?? null, accuracy ?? null);
+  }
+
+  res.json({ message: 'GPS location updated' });
+});
+
+router.delete('/gps/:shipmentId', authenticate, authorize('admin', 'manager'), (req: Request, res: Response) => {
+  prepare('DELETE FROM gps_locations WHERE shipment_id = ?').run(req.params.shipmentId);
+  res.json({ message: 'GPS tracking stopped' });
+});
+
+// ─── Shipment by ID (must be after /cities and /gps/*) ───
+
+router.get('/:id', authenticate, (req: Request, res: Response) => {
   const shipment = prepare(`
     SELECT id, shipment_id as shipmentId, from_en, from_mm, to_en, to_mm,
            carrier, dispatch_date as dispatchDate, eta, status,
@@ -159,14 +159,12 @@ router.get('/:id', authenticate, (req: Request, res: Response) => {
 });
 
 router.post('/', authenticate, authorize('admin', 'manager', 'staff'), validate(createShipmentSchema), (req: Request, res: Response) => {
-
   const { fromEn, fromMm, toEn, toMm, carrier, dispatchDate, eta, items } = req.body;
 
   const id = generateId();
   const shipmentId = generateShipmentId();
   const trackingNumber = generateTrackingNumber(carrier);
 
-  const dispatchMs = new Date(dispatchDate).getTime();
   const etaMs = new Date(eta).getTime();
   const daysRemaining = Math.max(0, Math.ceil((etaMs - Date.now()) / (1000 * 60 * 60 * 24)));
 
@@ -191,7 +189,6 @@ router.post('/', authenticate, authorize('admin', 'manager', 'staff'), validate(
 });
 
 router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validate(updateShipmentStatusSchema), (req: Request, res: Response) => {
-
   const { id } = req.params;
   const { status } = req.body;
 
@@ -207,9 +204,9 @@ router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validat
     return;
   }
 
-  const daysRemaining = status === 'delivered' ? 0 : undefined;
-  if (daysRemaining !== undefined) {
+  if (status === 'delivered') {
     prepare('UPDATE shipments SET status = ?, days_remaining = 0, updated_at = datetime("now") WHERE id = ?').run(status, id);
+    prepare('DELETE FROM gps_locations WHERE shipment_id = ?').run(id);
   } else {
     prepare('UPDATE shipments SET status = ?, updated_at = datetime("now") WHERE id = ?').run(status, id);
   }
@@ -221,9 +218,9 @@ router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validat
 });
 
 router.delete('/:id', authenticate, authorize('admin'), (req: Request, res: Response) => {
-
   const result = prepare('DELETE FROM shipments WHERE id = ?').run(req.params.id);
   if (result.changes === 0) throw new AppError(404, 'Shipment not found');
+  prepare('DELETE FROM gps_locations WHERE shipment_id = ?').run(req.params.id);
   res.json({ message: 'Shipment deleted successfully' });
 });
 

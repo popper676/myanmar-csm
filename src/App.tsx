@@ -15,6 +15,7 @@ import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import DriverTracking from "./pages/DriverTracking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="/payments" element={<Payments />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/driver-tracking" element={<DriverTracking />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

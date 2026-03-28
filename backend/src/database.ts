@@ -166,6 +166,20 @@ export function initializeDatabase(): void {
   `);
 
   exec(`
+    CREATE TABLE IF NOT EXISTS gps_locations (
+      id TEXT PRIMARY KEY,
+      shipment_id TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      speed REAL,
+      heading REAL,
+      accuracy REAL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(shipment_id)
+    )
+  `);
+
+  exec(`
     CREATE TABLE IF NOT EXISTS payments (
       id TEXT PRIMARY KEY,
       payment_id TEXT UNIQUE NOT NULL,

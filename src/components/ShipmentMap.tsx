@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { shipmentApi } from "@/lib/api";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -15,9 +16,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-/** Accurate lat/lng for cities — Myanmar, Thailand, China */
 const CITY_COORDS: Record<string, { lat: number; lng: number; mm: string }> = {
-  // ─── Myanmar ───
   Yangon:      { lat: 16.8661, lng: 96.1951, mm: "ရန်ကုန်" },
   Bago:        { lat: 17.3352, lng: 96.4814, mm: "ပဲခူး" },
   Naypyidaw:   { lat: 19.7633, lng: 96.0785, mm: "နေပြည်တော်" },
@@ -38,7 +37,6 @@ const CITY_COORDS: Record<string, { lat: number; lng: number; mm: string }> = {
   Myeik:       { lat: 12.4394, lng: 98.6006, mm: "မြိတ်" },
   Hakha:       { lat: 22.6415, lng: 93.6162, mm: "ဟားခါး" },
   Loikaw:      { lat: 19.6747, lng: 97.2099, mm: "လွိုင်ကော်" },
-  // ─── Thailand ───
   Bangkok:       { lat: 13.7563, lng: 100.5018, mm: "ဘန်ကောက်" },
   "Chiang Mai":  { lat: 18.7883, lng: 98.9853,  mm: "ချင်းမိုင်" },
   "Chiang Rai":  { lat: 19.9105, lng: 99.8406,  mm: "ချင်းရိုင်" },
@@ -48,7 +46,6 @@ const CITY_COORDS: Record<string, { lat: number; lng: number; mm: string }> = {
   Phuket:        { lat: 7.8804,  lng: 98.3923,  mm: "ဖူးခက်" },
   "Khon Kaen":   { lat: 16.4322, lng: 102.8236, mm: "ခွန်ကဲန်" },
   Ranong:        { lat: 9.9625,  lng: 98.6385,  mm: "ရနောင်း" },
-  // ─── China ───
   Kunming:     { lat: 25.0389, lng: 102.7183, mm: "ကူမင်း" },
   Ruili:       { lat: 24.0131, lng: 97.8561,  mm: "ရွှေလီ" },
   Guangzhou:   { lat: 23.1291, lng: 113.2644, mm: "ကွမ်ကျိုး" },
@@ -74,19 +71,12 @@ function resolveCity(name: string): { lat: number; lng: number; mm: string } | n
 type ShipmentStatus = "ordered" | "dispatched" | "in_transit" | "customs" | "delivered";
 
 const STATUS_COLORS: Record<ShipmentStatus, string> = {
-  ordered:    "#6366f1",
-  dispatched: "#0ea5e9",
-  in_transit: "#f59e0b",
-  customs:    "#ef4444",
-  delivered:  "#22c55e",
+  ordered: "#6366f1", dispatched: "#0ea5e9", in_transit: "#f59e0b",
+  customs: "#ef4444", delivered: "#22c55e",
 };
-
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  ordered:    "Ordered",
-  dispatched: "Dispatched",
-  in_transit: "In Transit",
-  customs:    "Customs",
-  delivered:  "Delivered",
+  ordered: "Ordered", dispatched: "Dispatched", in_transit: "In Transit",
+  customs: "Customs", delivered: "Delivered",
 };
 
 function statusIcon(status: ShipmentStatus): L.DivIcon {
@@ -94,45 +84,29 @@ function statusIcon(status: ShipmentStatus): L.DivIcon {
   const label = STATUS_LABELS[status] ?? status;
   return L.divIcon({
     className: "shipment-map-div-icon",
-    html: `<div style="
-      background: ${color};
-      color: #fff;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
-      white-space: nowrap;
-      border: 2px solid #fff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-      ${status === "in_transit" ? "animation: shipmentMapPulse 2s ease-in-out infinite;" : ""}
-    ">${label}</div>`,
-    iconSize: [0, 0],
-    iconAnchor: [0, 12],
-    popupAnchor: [0, -18],
+    html: `<div style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);${status === "in_transit" ? "animation:shipmentMapPulse 2s ease-in-out infinite;" : ""}">${label}</div>`,
+    iconSize: [0, 0], iconAnchor: [0, 12], popupAnchor: [0, -18],
   });
 }
 
+const GPS_ICON = L.divIcon({
+  className: "shipment-map-div-icon",
+  html: `<div style="background:#10b981;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;border:3px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,0.4);animation:shipmentMapPulse 1.5s ease-in-out infinite;">📍 LIVE</div>`,
+  iconSize: [0, 0], iconAnchor: [0, 14], popupAnchor: [0, -20],
+});
+
 type ShipmentRow = {
-  id: string;
-  shipmentId: string;
-  from: { en: string };
-  to: { en: string };
-  status: ShipmentStatus;
-  carrier?: string;
-  trackingNumber?: string;
+  id: string; shipmentId: string;
+  from: { en: string }; to: { en: string };
+  status: ShipmentStatus; carrier?: string;
 };
 
-/** Lerp for progress marker (0→1) */
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * Math.min(1, Math.max(0, t));
 }
 
 const PROGRESS_MAP: Record<ShipmentStatus, number> = {
-  ordered: 0.05,
-  dispatched: 0.2,
-  in_transit: 0.5,
-  customs: 0.8,
-  delivered: 1,
+  ordered: 0.05, dispatched: 0.2, in_transit: 0.5, customs: 0.8, delivered: 1,
 };
 
 function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
@@ -143,14 +117,18 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   return null;
 }
 
-function InvalidateOnResize() {
+function ResizeHandler({ trigger }: { trigger: number }) {
   const map = useMap();
   useEffect(() => {
-    const t = setTimeout(() => map.invalidateSize({ animate: true }), 150);
-    return () => clearTimeout(t);
-  });
+    const t1 = setTimeout(() => map.invalidateSize({ animate: false }), 50);
+    const t2 = setTimeout(() => map.invalidateSize({ animate: false }), 200);
+    const t3 = setTimeout(() => map.invalidateSize({ animate: false }), 500);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [map, trigger]);
   return null;
 }
+
+type GpsLocation = { shipmentId: string; lat: number; lng: number; speed?: number; updatedAt: string };
 
 type Props = {
   cities: { en: string; mm?: string; lat?: number; lng?: number }[];
@@ -159,7 +137,44 @@ type Props = {
 
 export default function ShipmentMap({ shipments }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
+  const [resizeTick, setResizeTick] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpand = useCallback(() => {
+    setExpanded((v) => !v);
+    setResizeTick((n) => n + 1);
+  }, []);
+
+  // Escape key closes fullscreen
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setExpanded(false); setResizeTick((n) => n + 1); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  // Lock body scroll when expanded
+  useEffect(() => {
+    if (expanded) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => { document.body.style.overflow = ""; };
+  }, [expanded]);
+
+  // GPS live locations polling
+  const [gpsLocations, setGpsLocations] = useState<GpsLocation[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await shipmentApi.gpsLocations();
+        if (!cancelled) setGpsLocations(data);
+      } catch { /* silent */ }
+    };
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
   const rows: ShipmentRow[] = [];
   for (const raw of shipments) {
     const r = raw as Record<string, unknown>;
@@ -170,22 +185,15 @@ export default function ShipmentMap({ shipments }: Props) {
     const status = r.status as ShipmentStatus | undefined;
     if (!fromEn || !toEn || !status) continue;
     rows.push({
-      id: String(r.id ?? ""),
-      shipmentId: String(r.shipmentId ?? ""),
-      from: { en: fromEn },
-      to: { en: toEn },
-      status,
+      id: String(r.id ?? ""), shipmentId: String(r.shipmentId ?? ""),
+      from: { en: fromEn }, to: { en: toEn }, status,
       carrier: (r.carrier as string) ?? "",
-      trackingNumber: (r.trackingNumber as string) ?? "",
     });
   }
 
   type RouteInfo = {
-    row: ShipmentRow;
-    from: { lat: number; lng: number };
-    to: { lat: number; lng: number };
-    color: string;
-    progress: [number, number];
+    row: ShipmentRow; from: { lat: number; lng: number }; to: { lat: number; lng: number };
+    color: string; progress: [number, number];
   };
 
   const routes: RouteInfo[] = [];
@@ -196,136 +204,143 @@ export default function ShipmentMap({ shipments }: Props) {
     const from = resolveCity(row.from.en);
     const to = resolveCity(row.to.en);
     if (!from || !to) continue;
-
     const color = STATUS_COLORS[row.status] ?? "#6366f1";
     const t = PROGRESS_MAP[row.status] ?? 0.5;
-    const progressLat = lerp(from.lat, to.lat, t);
-    const progressLng = lerp(from.lng, to.lng, t);
-
-    routes.push({ row, from, to, color, progress: [progressLat, progressLng] });
+    routes.push({ row, from, to, color, progress: [lerp(from.lat, to.lat, t), lerp(from.lng, to.lng, t)] });
     allLatLngs.push([from.lat, from.lng], [to.lat, to.lng]);
     drawnCities.add(row.from.en);
     drawnCities.add(row.to.en);
   }
 
-  if (allLatLngs.length === 0) {
-    allLatLngs.push([16.87, 96.20], [21.96, 96.09]);
+  // Include GPS points in bounds
+  for (const gps of gpsLocations) {
+    if (Number.isFinite(gps.lat) && Number.isFinite(gps.lng)) {
+      allLatLngs.push([gps.lat, gps.lng]);
+    }
   }
 
+  if (allLatLngs.length === 0) allLatLngs.push([16.87, 96.20], [21.96, 96.09]);
   const bounds = L.latLngBounds(allLatLngs.map(([lat, lng]) => L.latLng(lat, lng)));
 
-  const mapHeight = expanded ? "calc(100vh - 40px)" : "440px";
+  // Map GPS by shipment ID for overlay
+  const gpsById = new Map<string, GpsLocation>();
+  for (const g of gpsLocations) gpsById.set(g.shipmentId, g);
 
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-lg border border-border transition-all duration-300 ease-in-out ${expanded ? "fixed inset-2 z-[9999] rounded-xl shadow-2xl" : ""}`}
-      style={{ minHeight: expanded ? undefined : 440, height: expanded ? "calc(100vh - 16px)" : undefined }}
-    >
-      {/* Expand / Collapse button */}
-      <button
-        onClick={toggleExpand}
-        title={expanded ? "Collapse map" : "Expand map fullscreen"}
-        className="absolute left-2 top-2 z-[1001] flex items-center gap-1.5 rounded-md border bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md transition-colors hover:bg-white dark:bg-zinc-900/95 dark:hover:bg-zinc-800 dark:border-zinc-700"
+    <>
+      {/* Dark backdrop when fullscreen */}
+      {expanded && <div className="fixed inset-0 z-[9998] bg-black/60" onClick={toggleExpand} />}
+
+      <div
+        ref={containerRef}
+        className={`relative overflow-hidden rounded-lg border border-border bg-background ${expanded ? "fixed inset-3 z-[9999] rounded-xl shadow-2xl" : ""}`}
+        style={expanded ? {} : { height: 440 }}
       >
-        {expanded ? (
-          <>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-            Collapse
-          </>
-        ) : (
-          <>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-            Full Screen
-          </>
-        )}
-      </button>
+        {/* Expand / Collapse button */}
+        <button
+          onClick={toggleExpand}
+          title={expanded ? "Collapse (Esc)" : "Full Screen"}
+          className="absolute left-2 top-2 z-[1001] flex items-center gap-1.5 rounded-md border bg-white px-2.5 py-1.5 text-xs font-semibold shadow-lg hover:bg-gray-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:border-zinc-700"
+        >
+          {expanded ? (
+            <><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Collapse</>
+          ) : (
+            <><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Full Screen</>
+          )}
+        </button>
 
-      {/* Legend */}
-      <div className="pointer-events-none absolute right-2 top-2 z-[1000] rounded-md border bg-white/95 px-3 py-2 text-[11px] shadow-md dark:bg-zinc-900/95 dark:border-zinc-700">
-        <p className="font-bold mb-1">Route colors</p>
-        {(Object.entries(STATUS_COLORS) as [ShipmentStatus, string][]).map(([s, c]) => (
-          <div key={s} className="flex items-center gap-1.5">
-            <span className="inline-block h-[4px] w-5 rounded-full" style={{ background: c }} />
-            <span>{STATUS_LABELS[s]}</span>
-          </div>
-        ))}
+        {/* Legend */}
+        <div className="pointer-events-none absolute right-2 top-2 z-[1000] rounded-md border bg-white/95 px-3 py-2 text-[11px] shadow-md dark:bg-zinc-900/95 dark:border-zinc-700">
+          <p className="font-bold mb-1">Route colors</p>
+          {(Object.entries(STATUS_COLORS) as [ShipmentStatus, string][]).map(([s, c]) => (
+            <div key={s} className="flex items-center gap-1.5">
+              <span className="inline-block h-[4px] w-5 rounded-full" style={{ background: c }} />
+              <span>{STATUS_LABELS[s]}</span>
+            </div>
+          ))}
+          {gpsLocations.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-1 pt-1 border-t">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="font-semibold">Live GPS</span>
+            </div>
+          )}
+        </div>
+
+        <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full h-full" scrollWheelZoom>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <FitBounds bounds={bounds} />
+          <ResizeHandler trigger={resizeTick} />
+
+          {routes.map((r, i) => (
+            <Polyline key={`route-${r.row.id}-${i}`} positions={[[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]]}
+              pathOptions={{ color: r.color, weight: 5, opacity: 0.9 }}>
+              <Popup>
+                <div style={{ minWidth: 160 }}>
+                  <strong>{r.row.shipmentId}</strong>
+                  <div>{r.row.from.en} → {r.row.to.en}</div>
+                  <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
+                  {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
+                </div>
+              </Popup>
+            </Polyline>
+          ))}
+
+          {[...drawnCities].map((cityName) => {
+            const city = resolveCity(cityName);
+            if (!city) return null;
+            return (
+              <CircleMarker key={`city-${cityName}`} center={[city.lat, city.lng]} radius={8}
+                pathOptions={{ color: "#1e293b", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }}>
+                <Tooltip permanent direction="top" offset={[0, -10]} className="city-label-tooltip">
+                  <span style={{ fontWeight: 700, fontSize: 12 }}>{cityName}</span>
+                  {city.mm && <span style={{ display: "block", fontSize: 10, opacity: 0.7 }}>{city.mm}</span>}
+                </Tooltip>
+              </CircleMarker>
+            );
+          })}
+
+          {/* Status progress markers (only if no live GPS for that shipment) */}
+          {routes.map((r, i) => {
+            if (gpsById.has(r.row.id)) return null;
+            return (
+              <Marker key={`prog-${r.row.id}-${i}`} position={r.progress} icon={statusIcon(r.row.status)} zIndexOffset={900}>
+                <Popup>
+                  <div style={{ minWidth: 140 }}>
+                    <strong>{r.row.shipmentId}</strong>
+                    <div>{r.row.from.en} → {r.row.to.en}</div>
+                    <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
+          {/* Live GPS markers */}
+          {gpsLocations.map((gps) => {
+            const row = rows.find((r) => r.id === gps.shipmentId);
+            return (
+              <Marker key={`gps-${gps.shipmentId}`} position={[gps.lat, gps.lng]} icon={GPS_ICON} zIndexOffset={1000}>
+                <Popup>
+                  <div style={{ minWidth: 160 }}>
+                    <strong>{row?.shipmentId ?? gps.shipmentId}</strong>
+                    {row && <div>{row.from.en} → {row.to.en}</div>}
+                    <div style={{ color: "#10b981", fontWeight: 700 }}>📍 Live GPS</div>
+                    {gps.speed != null && <div style={{ fontSize: 11 }}>Speed: {gps.speed} km/h</div>}
+                    <div style={{ fontSize: 10, opacity: 0.6 }}>Updated: {new Date(gps.updatedAt).toLocaleTimeString()}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+
+        <p className="pointer-events-none absolute bottom-1 left-2 right-2 text-[9px] text-muted-foreground opacity-70">
+          © OpenStreetMap contributors · Free tiles, no API key.
+        </p>
       </div>
-
-      <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full" style={{ height: mapHeight }} scrollWheelZoom>
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitBounds bounds={bounds} />
-        <InvalidateOnResize />
-
-        {/* Draw route lines */}
-        {routes.map((r, i) => (
-          <Polyline
-            key={`route-${r.row.id}-${i}`}
-            positions={[
-              [r.from.lat, r.from.lng],
-              [r.to.lat, r.to.lng],
-            ]}
-            pathOptions={{
-              color: r.color,
-              weight: 5,
-              opacity: 0.9,
-            }}
-          >
-            <Popup>
-              <div style={{ minWidth: 160 }}>
-                <strong>{r.row.shipmentId}</strong>
-                <div>{r.row.from.en} → {r.row.to.en}</div>
-                <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
-                {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
-              </div>
-            </Popup>
-          </Polyline>
-        ))}
-
-        {/* City circle markers with labels */}
-        {[...drawnCities].map((cityName) => {
-          const city = resolveCity(cityName);
-          if (!city) return null;
-          const mm = city.mm ?? "";
-          return (
-            <CircleMarker
-              key={`city-${cityName}`}
-              center={[city.lat, city.lng]}
-              radius={8}
-              pathOptions={{ color: "#1e293b", weight: 3, fillColor: "#ffffff", fillOpacity: 1 }}
-            >
-              <Tooltip permanent direction="top" offset={[0, -10]} className="city-label-tooltip">
-                <span style={{ fontWeight: 700, fontSize: 12 }}>{cityName}</span>
-                {mm && <span style={{ display: "block", fontSize: 10, opacity: 0.7 }}>{mm}</span>}
-              </Tooltip>
-            </CircleMarker>
-          );
-        })}
-
-        {/* Progress markers on route */}
-        {routes.map((r, i) => (
-          <Marker
-            key={`prog-${r.row.id}-${i}`}
-            position={r.progress}
-            icon={statusIcon(r.row.status)}
-            zIndexOffset={900}
-          >
-            <Popup>
-              <div style={{ minWidth: 140 }}>
-                <strong>{r.row.shipmentId}</strong>
-                <div>{r.row.from.en} → {r.row.to.en}</div>
-                <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-
-      <p className="pointer-events-none absolute bottom-1 left-2 right-2 text-[9px] text-muted-foreground opacity-70">
-        © OpenStreetMap contributors · Free tiles, no API key.
-      </p>
-    </div>
+    </>
   );
 }

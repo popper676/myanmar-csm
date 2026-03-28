@@ -69,15 +69,12 @@ export const shipmentApi = {
     api(`/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   delete: (id: string) => api(`/shipments/${id}`, { method: 'DELETE' }),
   cities: () => api('/shipments/cities'),
-  routeGeometry: (params: { fromLat: number; fromLng: number; toLat: number; toLng: number }) => {
-    const qs = new URLSearchParams({
-      fromLat: String(params.fromLat),
-      fromLng: String(params.fromLng),
-      toLat: String(params.toLat),
-      toLng: String(params.toLng),
-    });
-    return api<{ coordinates: [number, number][]; fallback?: boolean }>(`/shipments/route-geometry?${qs}`);
-  },
+  gpsLocations: () =>
+    api<{ shipmentId: string; lat: number; lng: number; speed?: number; updatedAt: string }[]>('/shipments/gps/locations'),
+  gpsUpdate: (data: { shipmentId: string; lat: number; lng: number; speed?: number; heading?: number; accuracy?: number }) =>
+    api('/shipments/gps/update', { method: 'POST', body: JSON.stringify(data) }),
+  gpsStop: (shipmentId: string) =>
+    api(`/shipments/gps/${shipmentId}`, { method: 'DELETE' }),
 };
 
 // ─── Suppliers ───────────────────────────────────────
