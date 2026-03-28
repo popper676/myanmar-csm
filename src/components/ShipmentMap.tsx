@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -143,12 +143,23 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   return null;
 }
 
+function InvalidateOnResize() {
+  const map = useMap();
+  useEffect(() => {
+    const t = setTimeout(() => map.invalidateSize({ animate: true }), 150);
+    return () => clearTimeout(t);
+  });
+  return null;
+}
+
 type Props = {
   cities: { en: string; mm?: string; lat?: number; lng?: number }[];
   shipments: unknown[];
 };
 
 export default function ShipmentMap({ shipments }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
   const rows: ShipmentRow[] = [];
   for (const raw of shipments) {
     const r = raw as Record<string, unknown>;
@@ -203,8 +214,32 @@ export default function ShipmentMap({ shipments }: Props) {
 
   const bounds = L.latLngBounds(allLatLngs.map(([lat, lng]) => L.latLng(lat, lng)));
 
+  const mapHeight = expanded ? "calc(100vh - 40px)" : "440px";
+
   return (
-    <div className="relative w-full overflow-hidden rounded-lg border border-border" style={{ minHeight: 440 }}>
+    <div
+      className={`relative w-full overflow-hidden rounded-lg border border-border transition-all duration-300 ease-in-out ${expanded ? "fixed inset-2 z-[9999] rounded-xl shadow-2xl" : ""}`}
+      style={{ minHeight: expanded ? undefined : 440, height: expanded ? "calc(100vh - 16px)" : undefined }}
+    >
+      {/* Expand / Collapse button */}
+      <button
+        onClick={toggleExpand}
+        title={expanded ? "Collapse map" : "Expand map fullscreen"}
+        className="absolute left-2 top-2 z-[1001] flex items-center gap-1.5 rounded-md border bg-white/95 px-2.5 py-1.5 text-xs font-medium shadow-md transition-colors hover:bg-white dark:bg-zinc-900/95 dark:hover:bg-zinc-800 dark:border-zinc-700"
+      >
+        {expanded ? (
+          <>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            Collapse
+          </>
+        ) : (
+          <>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            Full Screen
+          </>
+        )}
+      </button>
+
       {/* Legend */}
       <div className="pointer-events-none absolute right-2 top-2 z-[1000] rounded-md border bg-white/95 px-3 py-2 text-[11px] shadow-md dark:bg-zinc-900/95 dark:border-zinc-700">
         <p className="font-bold mb-1">Route colors</p>
@@ -216,12 +251,13 @@ export default function ShipmentMap({ shipments }: Props) {
         ))}
       </div>
 
-      <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full" style={{ height: 440 }} scrollWheelZoom>
+      <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full" style={{ height: mapHeight }} scrollWheelZoom>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitBounds bounds={bounds} />
+        <InvalidateOnResize />
 
         {/* Draw route lines */}
         {routes.map((r, i) => (
