@@ -101,13 +101,77 @@ type ShipmentRow = {
   status: ShipmentStatus; carrier?: string;
 };
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * Math.min(1, Math.max(0, t));
-}
-
 const PROGRESS_MAP: Record<ShipmentStatus, number> = {
   ordered: 0.05, dispatched: 0.2, in_transit: 0.5, customs: 0.8, delivered: 1,
 };
+
+/** Walk along a polyline and return the point at fraction t (0→1) of total length */
+function pointAlongPolyline(coords: [number, number][], t: number): [number, number] {
+  if (coords.length === 0) return [0, 0];
+  if (coords.length === 1 || t <= 0) return coords[0];
+  if (t >= 1) return coords[coords.length - 1];
+
+  let totalDist = 0;
+  const segDists: number[] = [];
+  for (let i = 1; i < coords.length; i++) {
+    const d = haversine(coords[i - 1], coords[i]);
+    segDists.push(d);
+    totalDist += d;
+  }
+  if (totalDist === 0) return coords[0];
+
+  const targetDist = t * totalDist;
+  let acc = 0;
+  for (let i = 0; i < segDists.length; i++) {
+    if (acc + segDists[i] >= targetDist) {
+      const frac = (targetDist - acc) / segDists[i];
+      const [lat1, lng1] = coords[i];
+      const [lat2, lng2] = coords[i + 1];
+      return [lat1 + (lat2 - lat1) * frac, lng1 + (lng2 - lng1) * frac];
+    }
+    acc += segDists[i];
+  }
+  return coords[coords.length - 1];
+}
+
+function haversine(a: [number, number], b: [number, number]): number {
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dlat = toRad(b[0] - a[0]);
+  const dlng = toRad(b[1] - a[1]);
+  const sin2 = Math.sin(dlat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dlng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(sin2), Math.sqrt(1 - sin2));
+}
+
+/** Slice polyline: return the portion from 0 to fraction t */
+function slicePolyline(coords: [number, number][], t: number): [number, number][] {
+  if (coords.length < 2 || t <= 0) return [coords[0] || [0, 0]];
+  if (t >= 1) return coords;
+
+  let totalDist = 0;
+  const segDists: number[] = [];
+  for (let i = 1; i < coords.length; i++) {
+    const d = haversine(coords[i - 1], coords[i]);
+    segDists.push(d);
+    totalDist += d;
+  }
+  if (totalDist === 0) return [coords[0]];
+
+  const targetDist = t * totalDist;
+  const result: [number, number][] = [coords[0]];
+  let acc = 0;
+  for (let i = 0; i < segDists.length; i++) {
+    if (acc + segDists[i] >= targetDist) {
+      const frac = (targetDist - acc) / segDists[i];
+      const [lat1, lng1] = coords[i];
+      const [lat2, lng2] = coords[i + 1];
+      result.push([lat1 + (lat2 - lat1) * frac, lng1 + (lng2 - lng1) * frac]);
+      return result;
+    }
+    acc += segDists[i];
+    result.push(coords[i + 1]);
+  }
+  return result;
+}
 
 function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   const map = useMap();
@@ -125,6 +189,8 @@ function MapRefCapture({ onMap }: { onMap: (map: L.Map) => void }) {
 
 type GpsLocation = { shipmentId: string; lat: number; lng: number; speed?: number; updatedAt: string };
 
+type RouteGeometry = { coordinates: [number, number][]; fallback: boolean; distance?: number; duration?: number };
+
 type Props = {
   cities: { en: string; mm?: string; lat?: number; lng?: number }[];
   shipments: unknown[];
@@ -137,17 +203,14 @@ export default function ShipmentMap({ shipments }: Props) {
 
   const toggleExpand = useCallback(() => {
     setExpanded((v) => {
-      const next = !v;
-      // Aggressively invalidate after the DOM settles
       setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 0);
       setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 100);
       setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 300);
       setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 600);
-      return next;
+      return !v;
     });
   }, []);
 
-  // Escape key closes fullscreen
   useEffect(() => {
     if (!expanded) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") toggleExpand(); };
@@ -155,7 +218,6 @@ export default function ShipmentMap({ shipments }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded, toggleExpand]);
 
-  // Lock body scroll when expanded
   useEffect(() => {
     if (expanded) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
@@ -177,6 +239,7 @@ export default function ShipmentMap({ shipments }: Props) {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
+  // Parse shipment rows
   const rows: ShipmentRow[] = [];
   for (const raw of shipments) {
     const r = raw as Record<string, unknown>;
@@ -193,12 +256,16 @@ export default function ShipmentMap({ shipments }: Props) {
     });
   }
 
-  type RouteInfo = {
-    row: ShipmentRow; from: { lat: number; lng: number }; to: { lat: number; lng: number };
-    color: string; progress: [number, number];
+  // Resolve cities to coords
+  type ResolvedRoute = {
+    row: ShipmentRow;
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+    color: string;
+    routeKey: string;
   };
 
-  const routes: RouteInfo[] = [];
+  const resolvedRoutes: ResolvedRoute[] = [];
   const allLatLngs: [number, number][] = [];
   const drawnCities = new Set<string>();
 
@@ -207,12 +274,44 @@ export default function ShipmentMap({ shipments }: Props) {
     const to = resolveCity(row.to.en);
     if (!from || !to) continue;
     const color = STATUS_COLORS[row.status] ?? "#6366f1";
-    const t = PROGRESS_MAP[row.status] ?? 0.5;
-    routes.push({ row, from, to, color, progress: [lerp(from.lat, to.lat, t), lerp(from.lng, to.lng, t)] });
+    const routeKey = `${row.from.en}→${row.to.en}`;
+    resolvedRoutes.push({ row, from, to, color, routeKey });
     allLatLngs.push([from.lat, from.lng], [to.lat, to.lng]);
     drawnCities.add(row.from.en);
     drawnCities.add(row.to.en);
   }
+
+  // Fetch OSRM road geometries (cached by route pair)
+  const [roadPaths, setRoadPaths] = useState<Record<string, RouteGeometry>>({});
+  const fetchedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const toFetch: { key: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }[] = [];
+    for (const r of resolvedRoutes) {
+      if (!fetchedRef.current.has(r.routeKey)) {
+        fetchedRef.current.add(r.routeKey);
+        toFetch.push({ key: r.routeKey, from: r.from, to: r.to });
+      }
+    }
+    if (toFetch.length === 0) return;
+
+    for (const item of toFetch) {
+      shipmentApi.routeGeometry(item.from.lat, item.from.lng, item.to.lat, item.to.lng)
+        .then((geo) => {
+          setRoadPaths((prev) => ({ ...prev, [item.key]: geo }));
+        })
+        .catch(() => {
+          setRoadPaths((prev) => ({
+            ...prev,
+            [item.key]: {
+              coordinates: [[item.from.lat, item.from.lng], [item.to.lat, item.to.lng]],
+              fallback: true,
+            },
+          }));
+        });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedRoutes.map((r) => r.routeKey).join(",")]);
 
   // Include GPS points in bounds
   for (const gps of gpsLocations) {
@@ -224,7 +323,6 @@ export default function ShipmentMap({ shipments }: Props) {
   if (allLatLngs.length === 0) allLatLngs.push([16.87, 96.20], [21.96, 96.09]);
   const bounds = L.latLngBounds(allLatLngs.map(([lat, lng]) => L.latLng(lat, lng)));
 
-  // Map GPS by shipment ID for overlay
   const gpsById = new Map<string, GpsLocation>();
   for (const g of gpsLocations) gpsById.set(g.shipmentId, g);
 
@@ -232,7 +330,6 @@ export default function ShipmentMap({ shipments }: Props) {
 
   return (
     <>
-      {/* Dark backdrop when fullscreen */}
       {expanded && <div className="fixed inset-0 z-[9998] bg-black/60" onClick={toggleExpand} />}
 
       <div
@@ -240,7 +337,6 @@ export default function ShipmentMap({ shipments }: Props) {
         className={`relative overflow-hidden rounded-lg border border-border bg-background ${expanded ? "fixed inset-3 z-[9999] rounded-xl shadow-2xl" : ""}`}
         style={{ height: expanded ? "calc(100vh - 24px)" : 440 }}
       >
-        {/* Expand / Collapse button */}
         <button
           onClick={toggleExpand}
           title={expanded ? "Collapse (Esc)" : "Full Screen"}
@@ -253,7 +349,6 @@ export default function ShipmentMap({ shipments }: Props) {
           )}
         </button>
 
-        {/* Legend */}
         <div className="pointer-events-none absolute right-2 top-2 z-[1000] rounded-md border bg-white/95 px-3 py-2 text-[11px] shadow-md dark:bg-zinc-900/95 dark:border-zinc-700">
           <p className="font-bold mb-1">Route colors</p>
           {(Object.entries(STATUS_COLORS) as [ShipmentStatus, string][]).map(([s, c]) => (
@@ -283,20 +378,52 @@ export default function ShipmentMap({ shipments }: Props) {
           <FitBounds bounds={bounds} />
           <MapRefCapture onMap={captureMap} />
 
-          {routes.map((r, i) => (
-            <Polyline key={`route-${r.row.id}-${i}`} positions={[[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]]}
-              pathOptions={{ color: r.color, weight: 5, opacity: 0.9 }}>
-              <Popup>
-                <div style={{ minWidth: 160 }}>
-                  <strong>{r.row.shipmentId}</strong>
-                  <div>{r.row.from.en} → {r.row.to.en}</div>
-                  <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
-                  {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
-                </div>
-              </Popup>
-            </Polyline>
-          ))}
+          {/* Road route polylines */}
+          {resolvedRoutes.map((r, i) => {
+            const geo = roadPaths[r.routeKey];
+            const coords: [number, number][] = geo
+              ? geo.coordinates
+              : [[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]];
 
+            const t = PROGRESS_MAP[r.row.status] ?? 0.5;
+            const completedPart = slicePolyline(coords, t);
+            const isFullyDelivered = r.row.status === "delivered";
+
+            return (
+              <span key={`route-group-${r.row.id}-${i}`}>
+                {/* Full route — dashed (remaining) */}
+                {!isFullyDelivered && (
+                  <Polyline
+                    positions={coords}
+                    pathOptions={{ color: r.color, weight: 3, opacity: 0.3, dashArray: "8 6" }}
+                  />
+                )}
+                {/* Completed portion — solid */}
+                <Polyline
+                  positions={isFullyDelivered ? coords : completedPart}
+                  pathOptions={{ color: r.color, weight: 5, opacity: 0.9 }}
+                >
+                  <Popup>
+                    <div style={{ minWidth: 180 }}>
+                      <strong>{r.row.shipmentId}</strong>
+                      <div>{r.row.from.en} → {r.row.to.en}</div>
+                      <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
+                      {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
+                      {geo && !geo.fallback && geo.distance && (
+                        <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>
+                          {(geo.distance / 1000).toFixed(0)} km
+                          {geo.duration ? ` · ~${Math.round(geo.duration / 3600)}h ${Math.round((geo.duration % 3600) / 60)}m` : ""}
+                        </div>
+                      )}
+                      {geo?.fallback && <div style={{ fontSize: 10, opacity: 0.5 }}>Straight line (road data unavailable)</div>}
+                    </div>
+                  </Popup>
+                </Polyline>
+              </span>
+            );
+          })}
+
+          {/* City markers */}
           {[...drawnCities].map((cityName) => {
             const city = resolveCity(cityName);
             if (!city) return null;
@@ -311,11 +438,18 @@ export default function ShipmentMap({ shipments }: Props) {
             );
           })}
 
-          {/* Status progress markers (only if no live GPS for that shipment) */}
-          {routes.map((r, i) => {
+          {/* Progress markers — follow the road path */}
+          {resolvedRoutes.map((r, i) => {
             if (gpsById.has(r.row.id)) return null;
+            const geo = roadPaths[r.routeKey];
+            const coords: [number, number][] = geo
+              ? geo.coordinates
+              : [[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]];
+            const t = PROGRESS_MAP[r.row.status] ?? 0.5;
+            const pos = pointAlongPolyline(coords, t);
+
             return (
-              <Marker key={`prog-${r.row.id}-${i}`} position={r.progress} icon={statusIcon(r.row.status)} zIndexOffset={900}>
+              <Marker key={`prog-${r.row.id}-${i}`} position={pos} icon={statusIcon(r.row.status)} zIndexOffset={900}>
                 <Popup>
                   <div style={{ minWidth: 140 }}>
                     <strong>{r.row.shipmentId}</strong>
@@ -347,7 +481,7 @@ export default function ShipmentMap({ shipments }: Props) {
         </MapContainer>
 
         <p className="pointer-events-none absolute bottom-1 left-2 right-2 text-[9px] text-muted-foreground opacity-70">
-          © OpenStreetMap contributors · Free tiles, no API key.
+          © OpenStreetMap contributors · OSRM road routing · Free, no API key.
         </p>
       </div>
     </>

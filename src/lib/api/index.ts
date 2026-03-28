@@ -69,6 +69,10 @@ export const shipmentApi = {
     api(`/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   delete: (id: string) => api(`/shipments/${id}`, { method: 'DELETE' }),
   cities: () => api('/shipments/cities'),
+  routeGeometry: (fromLat: number, fromLng: number, toLat: number, toLng: number) =>
+    api<{ coordinates: [number, number][]; fallback: boolean; distance?: number; duration?: number }>(
+      `/shipments/route-geometry?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`
+    ),
   gpsLocations: () =>
     api<{ shipmentId: string; lat: number; lng: number; speed?: number; updatedAt: string }[]>('/shipments/gps/locations'),
   gpsUpdate: (data: { shipmentId: string; lat: number; lng: number; speed?: number; heading?: number; accuracy?: number }) =>
