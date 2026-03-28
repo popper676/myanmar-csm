@@ -142,37 +142,6 @@ function haversine(a: [number, number], b: [number, number]): number {
   return 6371 * 2 * Math.atan2(Math.sqrt(sin2), Math.sqrt(1 - sin2));
 }
 
-/** Slice polyline: return the portion from 0 to fraction t */
-function slicePolyline(coords: [number, number][], t: number): [number, number][] {
-  if (coords.length < 2 || t <= 0) return [coords[0] || [0, 0]];
-  if (t >= 1) return coords;
-
-  let totalDist = 0;
-  const segDists: number[] = [];
-  for (let i = 1; i < coords.length; i++) {
-    const d = haversine(coords[i - 1], coords[i]);
-    segDists.push(d);
-    totalDist += d;
-  }
-  if (totalDist === 0) return [coords[0]];
-
-  const targetDist = t * totalDist;
-  const result: [number, number][] = [coords[0]];
-  let acc = 0;
-  for (let i = 0; i < segDists.length; i++) {
-    if (acc + segDists[i] >= targetDist) {
-      const frac = (targetDist - acc) / segDists[i];
-      const [lat1, lng1] = coords[i];
-      const [lat2, lng2] = coords[i + 1];
-      result.push([lat1 + (lat2 - lat1) * frac, lng1 + (lng2 - lng1) * frac]);
-      return result;
-    }
-    acc += segDists[i];
-    result.push(coords[i + 1]);
-  }
-  return result;
-}
-
 function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   const map = useMap();
   useEffect(() => {
@@ -378,48 +347,34 @@ export default function ShipmentMap({ shipments }: Props) {
           <FitBounds bounds={bounds} />
           <MapRefCapture onMap={captureMap} />
 
-          {/* Road route polylines */}
+          {/* Road route polylines — solid color */}
           {resolvedRoutes.map((r, i) => {
             const geo = roadPaths[r.routeKey];
             const coords: [number, number][] = geo
               ? geo.coordinates
               : [[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]];
 
-            const t = PROGRESS_MAP[r.row.status] ?? 0.5;
-            const completedPart = slicePolyline(coords, t);
-            const isFullyDelivered = r.row.status === "delivered";
-
             return (
-              <span key={`route-group-${r.row.id}-${i}`}>
-                {/* Full route — dashed (remaining) */}
-                {!isFullyDelivered && (
-                  <Polyline
-                    positions={coords}
-                    pathOptions={{ color: r.color, weight: 3, opacity: 0.3, dashArray: "8 6" }}
-                  />
-                )}
-                {/* Completed portion — solid */}
-                <Polyline
-                  positions={isFullyDelivered ? coords : completedPart}
-                  pathOptions={{ color: r.color, weight: 5, opacity: 0.9 }}
-                >
-                  <Popup>
-                    <div style={{ minWidth: 180 }}>
-                      <strong>{r.row.shipmentId}</strong>
-                      <div>{r.row.from.en} → {r.row.to.en}</div>
-                      <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
-                      {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
-                      {geo && !geo.fallback && geo.distance && (
-                        <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>
-                          {(geo.distance / 1000).toFixed(0)} km
-                          {geo.duration ? ` · ~${Math.round(geo.duration / 3600)}h ${Math.round((geo.duration % 3600) / 60)}m` : ""}
-                        </div>
-                      )}
-                      {geo?.fallback && <div style={{ fontSize: 10, opacity: 0.5 }}>Straight line (road data unavailable)</div>}
-                    </div>
-                  </Popup>
-                </Polyline>
-              </span>
+              <Polyline
+                key={`route-${r.row.id}-${i}`}
+                positions={coords}
+                pathOptions={{ color: r.color, weight: 5, opacity: 0.9 }}
+              >
+                <Popup>
+                  <div style={{ minWidth: 180 }}>
+                    <strong>{r.row.shipmentId}</strong>
+                    <div>{r.row.from.en} → {r.row.to.en}</div>
+                    <div style={{ color: r.color, fontWeight: 700 }}>{STATUS_LABELS[r.row.status]}</div>
+                    {r.row.carrier && <div style={{ fontSize: 11 }}>Carrier: {r.row.carrier}</div>}
+                    {geo && !geo.fallback && geo.distance && (
+                      <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>
+                        {(geo.distance / 1000).toFixed(0)} km
+                        {geo.duration ? ` · ~${Math.round(geo.duration / 3600)}h ${Math.round((geo.duration % 3600) / 60)}m` : ""}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Polyline>
             );
           })}
 
