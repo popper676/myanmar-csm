@@ -117,14 +117,9 @@ function FitBounds({ bounds }: { bounds: L.LatLngBoundsExpression }) {
   return null;
 }
 
-function ResizeHandler({ trigger }: { trigger: number }) {
+function MapRefCapture({ onMap }: { onMap: (map: L.Map) => void }) {
   const map = useMap();
-  useEffect(() => {
-    const t1 = setTimeout(() => map.invalidateSize({ animate: false }), 50);
-    const t2 = setTimeout(() => map.invalidateSize({ animate: false }), 200);
-    const t3 = setTimeout(() => map.invalidateSize({ animate: false }), 500);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [map, trigger]);
+  useEffect(() => { onMap(map); }, [map, onMap]);
   return null;
 }
 
@@ -137,21 +132,28 @@ type Props = {
 
 export default function ShipmentMap({ shipments }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [resizeTick, setResizeTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
 
   const toggleExpand = useCallback(() => {
-    setExpanded((v) => !v);
-    setResizeTick((n) => n + 1);
+    setExpanded((v) => {
+      const next = !v;
+      // Aggressively invalidate after the DOM settles
+      setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 0);
+      setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 100);
+      setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 300);
+      setTimeout(() => mapRef.current?.invalidateSize({ animate: false }), 600);
+      return next;
+    });
   }, []);
 
   // Escape key closes fullscreen
   useEffect(() => {
     if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setExpanded(false); setResizeTick((n) => n + 1); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") toggleExpand(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [expanded, toggleExpand]);
 
   // Lock body scroll when expanded
   useEffect(() => {
@@ -226,6 +228,8 @@ export default function ShipmentMap({ shipments }: Props) {
   const gpsById = new Map<string, GpsLocation>();
   for (const g of gpsLocations) gpsById.set(g.shipmentId, g);
 
+  const captureMap = useCallback((map: L.Map) => { mapRef.current = map; }, []);
+
   return (
     <>
       {/* Dark backdrop when fullscreen */}
@@ -234,7 +238,7 @@ export default function ShipmentMap({ shipments }: Props) {
       <div
         ref={containerRef}
         className={`relative overflow-hidden rounded-lg border border-border bg-background ${expanded ? "fixed inset-3 z-[9999] rounded-xl shadow-2xl" : ""}`}
-        style={expanded ? {} : { height: 440 }}
+        style={{ height: expanded ? "calc(100vh - 24px)" : 440 }}
       >
         {/* Expand / Collapse button */}
         <button
@@ -266,13 +270,18 @@ export default function ShipmentMap({ shipments }: Props) {
           )}
         </div>
 
-        <MapContainer center={[19.5, 96.0]} zoom={6} className="z-0 w-full h-full" scrollWheelZoom>
+        <MapContainer
+          center={[19.5, 96.0]}
+          zoom={6}
+          scrollWheelZoom
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds bounds={bounds} />
-          <ResizeHandler trigger={resizeTick} />
+          <MapRefCapture onMap={captureMap} />
 
           {routes.map((r, i) => (
             <Polyline key={`route-${r.row.id}-${i}`} positions={[[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]]}
