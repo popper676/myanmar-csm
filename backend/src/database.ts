@@ -139,6 +139,88 @@ export function initializeDatabase(): void {
   `);
 
   exec(`
+    CREATE TABLE IF NOT EXISTS purchase_receipts (
+      id TEXT PRIMARY KEY,
+      po_id TEXT UNIQUE NOT NULL,
+      received_at TEXT NOT NULL DEFAULT (datetime('now')),
+      posted_by TEXT
+    )
+  `);
+
+  exec(`
+    CREATE TABLE IF NOT EXISTS sales_orders (
+      id TEXT PRIMARY KEY,
+      so_number TEXT UNIQUE NOT NULL,
+      customer_name TEXT NOT NULL,
+      order_date TEXT NOT NULL,
+      total_amount REAL NOT NULL DEFAULT 0,
+      items_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('draft','confirmed','fulfilled','cancelled')),
+      notes TEXT,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  exec(`
+    CREATE TABLE IF NOT EXISTS sales_order_items (
+      id TEXT PRIMARY KEY,
+      so_id TEXT NOT NULL,
+      inventory_item_id TEXT NOT NULL,
+      sku TEXT NOT NULL,
+      name TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      total REAL NOT NULL
+    )
+  `);
+
+  exec(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      invoice_number TEXT UNIQUE NOT NULL,
+      sales_order_id TEXT NOT NULL,
+      customer_name TEXT NOT NULL,
+      issue_date TEXT NOT NULL,
+      due_date TEXT,
+      total_amount REAL NOT NULL DEFAULT 0,
+      paid_amount REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'unpaid' CHECK(status IN ('unpaid','partial','paid','cancelled')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  exec(`
+    CREATE TABLE IF NOT EXISTS inventory_movements (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      movement_type TEXT NOT NULL CHECK(movement_type IN ('in','out')),
+      qty INTEGER NOT NULL,
+      unit_cost REAL NOT NULL DEFAULT 0,
+      reference_type TEXT NOT NULL,
+      reference_id TEXT NOT NULL,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  exec(`
+    CREATE TABLE IF NOT EXISTS accounting_entries (
+      id TEXT PRIMARY KEY,
+      entry_type TEXT NOT NULL CHECK(entry_type IN ('inflow','outflow')),
+      category TEXT NOT NULL,
+      reference_type TEXT NOT NULL,
+      reference_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      description TEXT,
+      entry_date TEXT NOT NULL DEFAULT (date('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  exec(`
     CREATE TABLE IF NOT EXISTS shipments (
       id TEXT PRIMARY KEY,
       shipment_id TEXT UNIQUE NOT NULL,
@@ -240,8 +322,17 @@ export function initializeDatabase(): void {
     'CREATE INDEX IF NOT EXISTS idx_inventory_warehouse ON inventory_items(warehouse_name)',
     'CREATE INDEX IF NOT EXISTS idx_inventory_stock_status ON inventory_items(stock_status)',
     'CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status)',
+    'CREATE INDEX IF NOT EXISTS idx_po_receipts_po_id ON purchase_receipts(po_id)',
     'CREATE INDEX IF NOT EXISTS idx_po_supplier ON purchase_orders(supplier_name)',
     'CREATE INDEX IF NOT EXISTS idx_shipments_status ON shipments(status)',
+    'CREATE INDEX IF NOT EXISTS idx_so_status ON sales_orders(status)',
+    'CREATE INDEX IF NOT EXISTS idx_so_customer ON sales_orders(customer_name)',
+    'CREATE INDEX IF NOT EXISTS idx_invoice_status ON invoices(status)',
+    'CREATE INDEX IF NOT EXISTS idx_invoice_so ON invoices(sales_order_id)',
+    'CREATE INDEX IF NOT EXISTS idx_inv_mov_item ON inventory_movements(item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_inv_mov_ref ON inventory_movements(reference_type, reference_id)',
+    'CREATE INDEX IF NOT EXISTS idx_acct_type ON accounting_entries(entry_type)',
+    'CREATE INDEX IF NOT EXISTS idx_acct_ref ON accounting_entries(reference_type, reference_id)',
     'CREATE INDEX IF NOT EXISTS idx_suppliers_category ON suppliers(category)',
     'CREATE INDEX IF NOT EXISTS idx_suppliers_region ON suppliers(region)',
     'CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)',

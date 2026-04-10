@@ -1,19 +1,24 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LayoutDashboard, Package, ShoppingCart, Truck, DollarSign, CreditCard, BarChart3, Settings, X, LogOut
+  LayoutDashboard, Package, ShoppingCart, Truck, DollarSign, CreditCard, Receipt, BarChart3, Settings, X, LogOut
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const menuItems = [
+const mainMenuItems = [
   { path: "/", labelEn: "Dashboard", labelMm: "ဒက်ရှ်ဘုတ်", icon: LayoutDashboard },
   { path: "/inventory", labelEn: "Inventory", labelMm: "သိုလှောင်ရုံ", icon: Package },
   { path: "/purchase-orders", labelEn: "Purchase Orders", labelMm: "မှာယူမှု", icon: ShoppingCart },
+  { path: "/sales-orders", labelEn: "Sales Orders", labelMm: "အရောင်းအော်ဒါ", icon: Receipt },
   { path: "/shipments", labelEn: "Shipments", labelMm: "ပေးပို့မှု", icon: Truck },
   { path: "/suppliers", labelEn: "Suppliers", labelMm: "ကုန်ပေးသူများ", icon: DollarSign },
-  { path: "/payments", labelEn: "Payments", labelMm: "ကျပ်ပေး", icon: CreditCard },
   { path: "/reports", labelEn: "Reports", labelMm: "သတင်းအချက်", icon: BarChart3 },
   { path: "/settings", labelEn: "Settings", labelMm: "ဆက်တင်", icon: Settings },
+];
+
+const financeMenuItems = [
+  { path: "/finance/payments", labelEn: "Payments", labelMm: "ကုန်ကျစရိတ် / ပေးချေမှု", icon: CreditCard },
+  { path: "/finance/invoices", labelEn: "Invoices", labelMm: "ငွေတောင်းခံလွှာ", icon: Receipt },
 ];
 
 export default function AppSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -65,7 +70,7 @@ export default function AppSidebar({ open, onClose }: { open: boolean; onClose: 
         </div>
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => {
+          {mainMenuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
@@ -73,6 +78,38 @@ export default function AppSidebar({ open, onClose }: { open: boolean; onClose: 
                 to={item.path}
                 onClick={onClose}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all duration-200 group ${
+                  isActive
+                    ? "bg-accent text-accent-foreground font-semibold"
+                    : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                }`}
+              >
+                <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-accent-foreground" : ""}`} />
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate">{item.labelEn}</span>
+                  <span className="text-[10px] font-myanmar opacity-60 truncate">{item.labelMm}</span>
+                </div>
+              </Link>
+            );
+          })}
+
+          <div className="px-3 pt-3 pb-1">
+            <div className={`flex items-center gap-2 px-2 py-1.5 rounded-md ${location.pathname.startsWith("/finance/") ? "bg-sidebar-accent/70" : ""}`}>
+              <CreditCard className="w-4 h-4" />
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-semibold">Finance & Accounting</span>
+                <span className="text-[10px] font-myanmar opacity-60 truncate">ဘဏ္ဍာရေးနှင့်စာရင်းကိုင်</span>
+              </div>
+            </div>
+          </div>
+
+          {financeMenuItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={onClose}
+                className={`ml-4 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all duration-200 ${
                   isActive
                     ? "bg-accent text-accent-foreground font-semibold"
                     : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground"

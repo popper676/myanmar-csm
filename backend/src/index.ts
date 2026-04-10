@@ -17,6 +17,8 @@ import purchaseOrderRoutes from './routes/purchaseOrders';
 import shipmentRoutes from './routes/shipments';
 import supplierRoutes from './routes/suppliers';
 import paymentRoutes from './routes/payments';
+import salesOrderRoutes from './routes/salesOrders';
+import invoiceRoutes from './routes/invoices';
 import reportRoutes from './routes/reports';
 import settingsRoutes from './routes/settings';
 
@@ -97,6 +99,8 @@ app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/sales-orders', salesOrderRoutes);
+app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 

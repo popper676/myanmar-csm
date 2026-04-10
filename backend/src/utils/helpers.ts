@@ -20,6 +20,18 @@ export function generatePaymentId(): string {
   return `PAY-${seq}`;
 }
 
+export function generateSoNumber(): string {
+  const year = new Date().getFullYear();
+  const seq = String(Math.floor(Math.random() * 9999) + 1).padStart(3, '0');
+  return `SO-${year}-${seq}`;
+}
+
+export function generateInvoiceNumber(): string {
+  const year = new Date().getFullYear();
+  const seq = String(Math.floor(Math.random() * 9999) + 1).padStart(3, '0');
+  return `INV-${year}-${seq}`;
+}
+
 export function generateTrackingNumber(carrier: string): string {
   const prefix = carrier.split(' ').map(w => w[0]).join('').toUpperCase();
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');

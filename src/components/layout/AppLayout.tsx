@@ -8,9 +8,11 @@ const breadcrumbMap: Record<string, { en: string; mm: string }> = {
   "/": { en: "Dashboard", mm: "ဒက်ရှ်ဘုတ်" },
   "/inventory": { en: "Inventory", mm: "သိုလှောင်ရုံ" },
   "/purchase-orders": { en: "Purchase Orders", mm: "မှာယူမှု" },
+  "/sales-orders": { en: "Sales Orders", mm: "အရောင်းအော်ဒါ" },
   "/shipments": { en: "Shipments", mm: "ပေးပို့မှု" },
   "/suppliers": { en: "Suppliers", mm: "ကုန်ပေးသူများ" },
-  "/payments": { en: "Payments", mm: "ကျပ်ပေး" },
+  "/finance/payments": { en: "Payments", mm: "ကုန်ကျစရိတ်" },
+  "/finance/invoices": { en: "Invoices", mm: "ငွေတောင်းခံလွှာ" },
   "/reports": { en: "Reports", mm: "သတင်းအချက်" },
   "/settings": { en: "Settings", mm: "ဆက်တင်" },
 };

@@ -106,6 +106,29 @@ export const paymentApi = {
   exportCsv: () => api<string>('/payments/export/csv'),
 };
 
+// ─── Sales Orders ────────────────────────────────────
+export const salesOrderApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api(`/sales-orders${qs}`);
+  },
+  get: (id: string) => api(`/sales-orders/${id}`),
+  create: (data: any) => api('/sales-orders', { method: 'POST', body: JSON.stringify(data) }),
+  updateStatus: (id: string, status: string) =>
+    api(`/sales-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+};
+
+// ─── Invoices ────────────────────────────────────────
+export const invoiceApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api(`/invoices${qs}`);
+  },
+  get: (id: string) => api(`/invoices/${id}`),
+  updateStatus: (id: string, status: string, paidAmount?: number) =>
+    api(`/invoices/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, paidAmount }) }),
+};
+
 // ─── Reports ─────────────────────────────────────────
 export const reportApi = {
   summary: () => api('/reports/summary'),

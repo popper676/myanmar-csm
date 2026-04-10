@@ -11,6 +11,8 @@ import PurchaseOrders from "./pages/PurchaseOrders";
 import Shipments from "./pages/Shipments";
 import Suppliers from "./pages/Suppliers";
 import Payments from "./pages/Payments";
+import SalesOrders from "./pages/SalesOrders";
+import Invoices from "./pages/Invoices";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/Settings";
 import Login from "./pages/Login";
@@ -78,9 +80,12 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/purchase-orders" element={<PurchaseOrders />} />
+              <Route path="/sales-orders" element={<SalesOrders />} />
               <Route path="/shipments" element={<Shipments />} />
               <Route path="/suppliers" element={<Suppliers />} />
-              <Route path="/payments" element={<Payments />} />
+              <Route path="/finance/payments" element={<Payments />} />
+              <Route path="/finance/invoices" element={<Invoices />} />
+              <Route path="/payments" element={<Navigate to="/finance/payments" replace />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/driver-tracking" element={<DriverTracking />} />

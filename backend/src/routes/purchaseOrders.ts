@@ -3,10 +3,85 @@ import { prepare, transaction } from '../db-wrapper';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createPurchaseOrderSchema, updatePurchaseOrderSchema, updatePurchaseOrderStatusSchema, purchaseOrderQuerySchema } from '../schemas/purchaseOrders';
-import { generateId, generatePoNumber } from '../utils/helpers';
+import { computeStockStatus, generateId, generatePoNumber } from '../utils/helpers';
 import { AppError } from '../middleware/errorHandler';
 
 const router = Router();
+
+function applyPurchaseReceipt(poId: string, userId: string): void {
+  const alreadyPosted = prepare('SELECT id FROM purchase_receipts WHERE po_id = ?').get(poId) as any;
+  if (alreadyPosted) return;
+
+  const order = prepare(`
+    SELECT id, po_number as poNumber, supplier_name as supplierName, warehouse, total_amount as totalAmount
+    FROM purchase_orders WHERE id = ?
+  `).get(poId) as any;
+  if (!order) throw new AppError(404, 'Purchase order not found');
+
+  const items = prepare(`
+    SELECT name, qty, unit_price as unitPrice
+    FROM purchase_order_items WHERE po_id = ?
+  `).all(poId) as any[];
+  if (items.length === 0) {
+    throw new AppError(400, 'Cannot receive PO with no items');
+  }
+
+  for (const item of items) {
+    const existing = prepare(`
+      SELECT id, sku, quantity, min_stock as minStock
+      FROM inventory_items
+      WHERE name_en = ? OR sku = ?
+      LIMIT 1
+    `).get(item.name, item.name) as any;
+
+    if (existing) {
+      const newQty = Number(existing.quantity) + Number(item.qty);
+      prepare(`
+        UPDATE inventory_items
+        SET quantity = ?, stock_status = ?, last_updated = datetime('now')
+        WHERE id = ?
+      `).run(newQty, computeStockStatus(newQty, Number(existing.minStock)), existing.id);
+
+      prepare(`
+        INSERT INTO inventory_movements (id, item_id, movement_type, qty, unit_cost, reference_type, reference_id, notes)
+        VALUES (?, ?, 'in', ?, ?, 'purchase_order', ?, ?)
+      `).run(generateId(), existing.id, item.qty, item.unitPrice, poId, `PO Receipt ${order.poNumber}`);
+    } else {
+      const newId = generateId();
+      const sku = `AUTO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      prepare(`
+        INSERT INTO inventory_items (
+          id, sku, name_en, name_mm, category, quantity, unit, min_stock, warehouse_name,
+          unit_price, supplier_name, stock_status, last_updated
+        ) VALUES (?, ?, ?, '', 'General', ?, 'pcs', 0, ?, ?, ?, ?, datetime('now'))
+      `).run(
+        newId,
+        sku,
+        item.name,
+        item.qty,
+        order.warehouse || 'Yangon Main',
+        item.unitPrice,
+        order.supplierName,
+        computeStockStatus(Number(item.qty), 0),
+      );
+
+      prepare(`
+        INSERT INTO inventory_movements (id, item_id, movement_type, qty, unit_cost, reference_type, reference_id, notes)
+        VALUES (?, ?, 'in', ?, ?, 'purchase_order', ?, ?)
+      `).run(generateId(), newId, item.qty, item.unitPrice, poId, `PO Receipt ${order.poNumber}`);
+    }
+  }
+
+  prepare(`
+    INSERT INTO accounting_entries (id, entry_type, category, reference_type, reference_id, amount, description, entry_date)
+    VALUES (?, 'outflow', 'procurement', 'purchase_order', ?, ?, ?, date('now'))
+  `).run(generateId(), poId, Number(order.totalAmount || 0), `PO ${order.poNumber} stock receipt`);
+
+  prepare(`
+    INSERT INTO purchase_receipts (id, po_id, posted_by)
+    VALUES (?, ?, ?)
+  `).run(generateId(), poId, userId);
+}
 
 router.get('/', authenticate, validate(purchaseOrderQuerySchema, 'query'), (req: Request, res: Response) => {
   const { status, search, page, limit } = req.query as any;
@@ -179,10 +254,16 @@ router.patch('/:id/status', authenticate, authorize('admin', 'manager'), validat
     throw new AppError(400, `Cannot transition from '${existing.status}' to '${status}'`);
   }
 
-  prepare('UPDATE purchase_orders SET status = ?, updated_at = datetime("now") WHERE id = ?').run(status, id);
+  transaction(() => {
+    prepare('UPDATE purchase_orders SET status = ?, updated_at = datetime("now") WHERE id = ?').run(status, id);
 
-  prepare(`INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details) VALUES (?, ?, 'status_change', 'purchase_order', ?, ?)`)
-    .run(generateId(), req.user!.userId, id, JSON.stringify({ from: existing.status, to: status }));
+    if ((status === 'received' || status === 'delivered') && existing.status !== 'received' && existing.status !== 'delivered') {
+      applyPurchaseReceipt(String(id), String(req.user!.userId));
+    }
+
+    prepare(`INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details) VALUES (?, ?, 'status_change', 'purchase_order', ?, ?)`)
+      .run(generateId(), req.user!.userId, id, JSON.stringify({ from: existing.status, to: status }));
+  });
 
   const order = prepare(`
     SELECT id, po_number as poNumber, supplier_name as supplier, order_date as orderDate,
